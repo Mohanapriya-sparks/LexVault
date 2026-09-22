@@ -5,7 +5,8 @@ node_modules/
 
 # Build Outputs & Generated Artifacts
 dist/
-build/
+/build/
+!circuits/build/
 artifacts/
 cache/
 .vite/
