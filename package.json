@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "compile:circuit": "node circuits/scripts/compile_circuit.js",
-    "test:circuit": "mocha circuits/tests/circuit.test.js --timeout 60000",
+    "test:circuit": "mocha circuits/tests/circuit.test.js --timeout 60000 --exit",
     "compile:contracts": "npx hardhat compile",
     "test:contracts": "npx hardhat test",
     "start:node": "npx hardhat node",
