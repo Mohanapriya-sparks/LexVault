@@ -31,7 +31,7 @@
 
 *Demo Video — Coming Soon • Pitch Deck — Coming Soon*
 
-*(Note: GitHub Actions and Pages workflows are prepared in `.github/workflows/` and will execute automatically upon initial repository publication.)*
+*(Note: GitHub Actions CI and GitHub Pages deployment workflows are prepared in `.github/workflows/` and remain untested on remote infrastructure until initial repository push.)*
 
 </div>
 

@@ -8,6 +8,7 @@ dist/
 build/
 artifacts/
 cache/
+.vite/
 typechain-types/
 coverage/
 temp/
