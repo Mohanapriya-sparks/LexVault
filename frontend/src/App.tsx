@@ -738,14 +738,14 @@ const SHOWCASE_DEFAULT_CASES: OnChainCaseSummary[] = [
     <div className="min-h-screen flex flex-col font-sans bg-slate-950 text-slate-100 selection:bg-cyan-500 selection:text-slate-950">
       {/* Showcase Mode Banner */}
       {((import.meta as any).env?.VITE_SHOWCASE_MODE === "true" || (typeof window !== "undefined" && window.location.hostname.includes("github.io"))) && (
-        <div className="bg-gradient-to-r from-cyan-950 via-indigo-950 to-purple-950 border-b border-cyan-500/40 px-4 py-2 text-center text-xs text-cyan-200 flex items-center justify-center gap-2 flex-wrap">
-          <span className="px-2 py-0.5 rounded-full bg-cyan-900/80 border border-cyan-400/60 text-cyan-200 font-bold text-[10px] uppercase tracking-wider">
-            Showcase Mode
+        <div className="bg-gradient-to-r from-cyan-950 via-indigo-950 to-purple-950 border-b border-cyan-500/40 px-4 py-2.5 text-center text-xs text-cyan-200 flex items-center justify-center gap-2 flex-wrap">
+          <span className="px-2.5 py-0.5 rounded-full bg-cyan-900/80 border border-cyan-400/60 text-cyan-200 font-bold text-[10px] uppercase tracking-wider">
+            Public Showcase Mode
           </span>
           <span>
-            Static Web Demonstration with simulated proofs. For live Circom Groth16 proving, Hardhat EVM execution, and client encryption, see the{" "}
+            Public Showcase Mode — Interactive demonstration using sample data. Cryptographic operations displayed here are simulated. Run the full project locally for real Circom proof generation and EVM verification. See the{" "}
             <a
-              href="https://github.com/SAGANA-2006/lexvault#local-setup"
+              href="https://github.com/SAGANA-2006/lexvault#local-setup-and-quickstart"
               target="_blank"
               rel="noreferrer"
               className="underline text-white font-semibold hover:text-cyan-300 transition"

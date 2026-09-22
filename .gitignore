@@ -8,26 +8,35 @@ dist/
 build/
 artifacts/
 cache/
+typechain-types/
 coverage/
+temp/
+tmp/
+private/
 .temp/
 
 # Environment Variables & Secrets
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
 *.pem
 *.key
 *.secret
 *.keystore
 
 # Local Vault Evidence & Session State
+vault/*.json
 vault/
 .runtime/
 logs/
 *.log
 presentation-session.json
+
+# Cloudflare quick tunnels & temporary tools
+cloudflared*.exe
+cloudflared*.log
+tunnel*.txt
+.reference/
 
 # IDE & OS Files
 .DS_Store
@@ -36,7 +45,3 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
-
-# Cloudflare quick tunnels & temporary tools
-cloudflared*.exe
-.reference/
