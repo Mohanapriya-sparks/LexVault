@@ -10,8 +10,8 @@
 
 ---
 
-[![CI](https://github.com/SAGANA-2006/lexvault/actions/workflows/ci.yml/badge.svg)](https://github.com/SAGANA-2006/lexvault/actions/workflows/ci.yml)
-[![Pages Showcase](https://github.com/SAGANA-2006/lexvault/actions/workflows/pages.yml/badge.svg)](https://SAGANA-2006.github.io/lexvault/)
+[![CI](https://github.com/Mohanapriya-sparks/lexvault/actions/workflows/ci.yml/badge.svg)](https://github.com/Mohanapriya-sparks/lexvault/actions/workflows/ci.yml)
+[![Pages Showcase](https://github.com/Mohanapriya-sparks/lexvault/actions/workflows/pages.yml/badge.svg)](https://mohanapriya-sparks.github.io/lexvault/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![React](https://img.shields.io/badge/Frontend-React%2018%20%2B%20TypeScript-61DAFB?logo=react&logoColor=black)](frontend/)
 [![Solidity](https://img.shields.io/badge/Smart%20Contracts-Solidity%200.8.20-363636?logo=solidity)](contracts/)
@@ -21,7 +21,7 @@
 [![Prototype Status](https://img.shields.io/badge/Status-Hackathon%20Prototype-orange)](#verified-prototype-results)
 
 <p align="center">
-  <a href="https://SAGANA-2006.github.io/lexvault/"><strong>🌐 Launch Public Showcase</strong></a> •
+  <a href="https://mohanapriya-sparks.github.io/lexvault/"><strong>🌐 Launch Public Showcase</strong></a> •
   <a href="#local-setup-and-quickstart"><strong>💻 Local Setup</strong></a> •
   <a href="docs/ARCHITECTURE.md"><strong>📐 Architecture</strong></a> •
   <a href="docs/DEMO_GUIDE.md"><strong>🎯 Demo Walkthrough</strong></a> •
@@ -383,7 +383,7 @@ Follow these steps to run the complete cryptographic prototype with live EVM ver
 ### 1. Clone Repository & Install Dependencies
 
 ```bash
-git clone https://github.com/SAGANA-2006/lexvault.git
+git clone https://github.com/Mohanapriya-sparks/lexvault.git
 cd lexvault
 
 # Install root dependencies
@@ -452,7 +452,7 @@ Open your browser at `http://localhost:3000` to interact with the live local pro
 
 ## Authors & Acknowledgements
 
-- **Maintainer & Lead Developer**: SAGANA-2006
+- **Maintainer & Lead Developer**: Mohanapriya-sparks
 - **Contribution**: See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution workflows and guidelines.
 
 ### Cryptographic Libraries & Standards

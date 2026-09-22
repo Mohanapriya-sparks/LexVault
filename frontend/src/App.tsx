@@ -924,7 +924,7 @@ const SHOWCASE_DEFAULT_CASES: OnChainCaseSummary[] = [
           <span>
             Public Showcase Mode — Interactive demonstration using sample data. Cryptographic operations displayed here are simulated. Run the full project locally for real Circom proof generation and EVM verification. See the{" "}
             <a
-              href="https://github.com/SAGANA-2006/lexvault#local-setup-and-quickstart"
+              href="https://github.com/Mohanapriya-sparks/lexvault#local-setup-and-quickstart"
               target="_blank"
               rel="noreferrer"
               className="underline text-white font-semibold hover:text-cyan-300 transition"
