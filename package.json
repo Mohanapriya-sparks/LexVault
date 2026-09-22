@@ -1,0 +1,42 @@
+{
+  "name": "lexvault",
+  "version": "1.0.0",
+  "description": "LexVault - Zero-Knowledge, Blockchain-Powered Evidence Vault",
+  "main": "index.js",
+  "scripts": {
+    "compile:circuit": "node circuits/scripts/compile_circuit.js",
+    "test:circuit": "mocha circuits/tests/circuit.test.js --timeout 60000",
+    "compile:contracts": "npx hardhat compile",
+    "test:contracts": "npx hardhat test",
+    "start:node": "npx hardhat node",
+    "deploy": "npx hardhat run scripts/deploy.js --network localhost",
+    "seed": "node scripts/seed_demo.js",
+    "start:backend": "npx ts-node backend/src/server.ts",
+    "dev:frontend": "npm run dev --prefix frontend"
+  },
+  "dependencies": {
+    "@types/multer": "^2.2.0",
+    "circomlib": "^2.0.5",
+    "circomlibjs": "^0.1.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "ethers": "^6.13.2",
+    "express": "^4.19.2",
+    "multer": "^2.4.0",
+    "snarkjs": "^0.7.4"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@resvg/resvg-js": "^2.6.2",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/mocha": "^10.0.7",
+    "@types/node": "^20.14.9",
+    "chai": "^4.3.10",
+    "hardhat": "^2.22.5",
+    "mocha": "^10.6.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.2",
+    "wabt": "^1.0.39"
+  }
+}

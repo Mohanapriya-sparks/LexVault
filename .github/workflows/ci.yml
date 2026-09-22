@@ -1,0 +1,51 @@
+name: LexVault CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-and-build:
+    name: Build, Test & Secret Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Root Dependencies
+        run: npm ci
+
+      - name: Compile Smart Contracts
+        run: npx hardhat compile
+
+      - name: Run Smart Contract Tests
+        run: npm run test:contracts
+
+      - name: Run Circom Circuit Tests
+        run: npm run test:circuit
+
+      - name: Install Frontend Dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Build Frontend for Production
+        working-directory: ./frontend
+        run: npm run build
+
+      - name: Automated Secret & Environment File Check
+        run: |
+          echo "Scanning for accidental secret commits..."
+          if [ -f .env ]; then
+            echo "ERROR: .env file found in commit!"
+            exit 1
+          fi
+          echo "Secret check passed."

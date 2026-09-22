@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build Outputs & Generated Artifacts
+dist/
+build/
+artifacts/
+cache/
+coverage/
+.temp/
+
+# Environment Variables & Secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.pem
+*.key
+*.secret
+*.keystore
+
+# Local Vault Evidence & Session State
+vault/
+.runtime/
+logs/
+*.log
+presentation-session.json
+
+# IDE & OS Files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Cloudflare quick tunnels & temporary tools
+cloudflared*.exe
+.reference/
