@@ -31,6 +31,8 @@
 
 *Demo Video — Coming Soon • Pitch Deck — Coming Soon*
 
+*(Note: GitHub Actions and Pages workflows are prepared in `.github/workflows/` and will execute automatically upon initial repository publication.)*
+
 </div>
 
 ---
@@ -51,7 +53,7 @@
 - [Project Directory Structure](#project-directory-structure)
 - [Local Setup and Quickstart](#local-setup-and-quickstart)
 - [Documentation Index](#documentation-index)
-- [Team & Acknowledgements](#team--acknowledgements)
+- [Authors & Acknowledgements](#authors--acknowledgements)
 - [License](#license)
 
 ---
@@ -210,7 +212,7 @@ The LexVault prototype has been validated across all core layers:
 | **End-to-End Lifecycle Tests** | Full upload $\to$ ZK proof $\to$ EVM verification | `5 / 5` | :white_check_mark: Passed |
 | **Case Isolation Regressions** | Cross-case proof rejection & isolation (#101 vs #107) | `12 / 12` | :white_check_mark: Passed |
 | **Security Policy Verification** | Quorum thresholds, tamper rejection, secret hygiene | `16 / 16` | :white_check_mark: Passed |
-| **Presentation Preflight Suite** | RPC health, contract state, seeded demo cases | `9 / 9` | :white_check_mark: Passed |
+| **Presentation Preflight Suite** | RPC health, contract state, seeded demo cases | `8 / 8` | :white_check_mark: Passed |
 
 > [!IMPORTANT]
 > **Prototype Verification Qualification**
@@ -292,11 +294,15 @@ Plain-language reference explaining Groth16, Poseidon hashing, Shamir secret sha
 5. **Compromised Endpoint Security**: Does not protect against malware, keyloggers, or memory scrapers on the analyst's machine.
 6. **Production Readiness**: This codebase is a presentation-grade, security-conscious hackathon prototype and has not undergone formal third-party audits.
 
-### Protocol Disclosures
+### Protocol & ZKP Disclosures
+- **ZKP Circuit Verification Limitation**:
+  > *“The Groth16 circuit proves knowledge of a leaf and Merkle path matching the registered root. By itself, it does not prove possession of the current raw evidence file or that the file was truthful when registered. Tamper detection depends on the application correctly recomputing the fingerprint from the reviewed file and comparing it through the verification workflow.”*
 - **Read-Only Verification**: Proof verification is executed via JSON-RPC `eth_call`. It is a read-only EVM state simulation: **no transaction is broadcast, no blockchain state is altered, and zero gas fee is incurred**.
 - **Public vs Private Inputs**: The case Merkle root is public. Raw evidence files, hashes, and private witness paths remain strictly private.
+- **Metadata Transmission Disclosure**: The registration payload includes the original filename and MIME type as unencrypted metadata for investigator reference. If filename confidentiality is required, a production deployment should transmit generic categorical labels (e.g. `evidence_item_01.dat`) or client-side encrypted metadata envelopes.
 - **Shamir Key Distribution Limitation**:
   > *“The prototype demonstrates 2-of-3 approval and Shamir-based key reconstruction. If all shares are accessible to the same backend process or storage environment, compromise of that environment could permit key reconstruction. A production deployment should distribute shares among independent custodians, devices or approval services.”*
+- **Cryptographic Setup Disclosure**: `circuits/build/pot12_final.ptau` is a **Phase 1 Powers-of-Tau artifact** (universal SRS), and `circuits/build/evidence_verifier_final.zkey` is **circuit-specific Phase 2 material**. The included trusted setup was generated locally for prototype demonstration and is not a formal multi-party production ceremony.
 
 ---
 
@@ -332,6 +338,7 @@ lexvault/
 │       └── server.ts              # Express REST API service & security logging
 ├── circuits/
 │   ├── evidence_verifier.circom   # Circom 2.1 zero-knowledge membership circuit
+│   ├── build/                     # Canonical compiled circuit artifacts (WASM, zkey, vkey, ptau)
 │   ├── scripts/                   # Circuit compilation and trusted setup scripts
 │   └── tests/                     # Circuit unit tests (valid/fake leaves, roots)
 ├── contracts/
@@ -443,12 +450,10 @@ Open your browser at `http://localhost:3000` to interact with the live local pro
 
 ---
 
-## Team & Acknowledgements
+## Authors & Acknowledgements
 
-- **Institution / College**: `[ENTER YOUR COLLEGE NAME]`
-- **Event / Hackathon**: `[ENTER THE HACKATHON NAME]`
-- **Team Members**:
-  - `[ENTER NAMES AND GITHUB USERNAMES]`
+- **Maintainer & Lead Developer**: SAGANA-2006
+- **Contribution**: See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution workflows and guidelines.
 
 ### Cryptographic Libraries & Standards
 - [Circom 2.1 & SnarkJS](https://github.com/iden3/snarkjs) — iden3 zero-knowledge proving stack.

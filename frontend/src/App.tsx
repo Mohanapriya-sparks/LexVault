@@ -304,7 +304,13 @@ const SHOWCASE_DEFAULT_CASES: OnChainCaseSummary[] = [
   },
 ];
 
+  const isShowcaseMode = (import.meta as any).env?.VITE_SHOWCASE_MODE === "true" || (typeof window !== "undefined" && window.location.hostname.includes("github.io"));
+
   const fetchAvailableCases = async () => {
+    if (isShowcaseMode) {
+      setAvailableCases(SHOWCASE_DEFAULT_CASES);
+      return;
+    }
     try {
       const res = await fetch("/api/cases");
       if (res.ok) {
@@ -331,15 +337,17 @@ const SHOWCASE_DEFAULT_CASES: OnChainCaseSummary[] = [
 
   const fetchCaseDetails = async (id: string) => {
     setCaseDetails(null);
-    try {
-      const res = await fetch(`/api/case/${id}`);
-      if (res.ok) {
-        const data = await res.json();
-        setCaseDetails(data);
-        return;
+    if (!isShowcaseMode) {
+      try {
+        const res = await fetch(`/api/case/${id}`);
+        if (res.ok) {
+          const data = await res.json();
+          setCaseDetails(data);
+          return;
+        }
+      } catch {
+        // Fallback for static showcase deployment
       }
-    } catch {
-      // Fallback for static showcase deployment
     }
     const fallback = SHOWCASE_DEFAULT_CASES.find((c) => c.caseId.toString() === id);
     if (fallback) {
@@ -448,6 +456,78 @@ const SHOWCASE_DEFAULT_CASES: OnChainCaseSummary[] = [
 
       const { hexHash, leafFieldElement } = await sha256ToFieldElementBrowser(rawBytes);
       const { keyBytes, keyShares } = generateClientShamirKeyAndShares();
+
+      if (isShowcaseMode) {
+        await new Promise((r) => setTimeout(r, 450));
+        const simulatedRoot = "0x" + Array.from(window.crypto.getRandomValues(new Uint8Array(32))).map(b => b.toString(16).padStart(2, "0")).join("");
+        const simCase = {
+          caseId: parseInt(targetCaseId),
+          merkleRoot: simulatedRoot,
+          custodian: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+          evidenceLabel: inputType === "file" ? regFileName : `Evidence Item #${targetCaseId}`,
+          timestamp: Date.now(),
+          custodyEventCount: 0,
+          registrationBlock: 5,
+          txHash: "0x" + Array.from(window.crypto.getRandomValues(new Uint8Array(32))).map(b => b.toString(16).padStart(2, "0")).join("").slice(0, 10) + "...demo_tx",
+        };
+        setAvailableCases(prev => [simCase, ...prev.filter(c => c.caseId !== simCase.caseId)]);
+        setCaseDetails({
+          caseId: simCase.caseId,
+          isRegistered: true,
+          onChainRecord: {
+            merkleRoot: simCase.merkleRoot,
+            timestamp: Math.floor(simCase.timestamp / 1000),
+            custodian: simCase.custodian,
+          },
+          metadata: {
+            filename: regFileName,
+            mimeType: regMimeType,
+            registeredAt: simCase.timestamp,
+          },
+          custodyHistory: [],
+          receipt: {
+            operations: {
+              rawEvidenceReceived: true,
+              sha256FingerprintGenerated: true,
+              fieldLeafDerived: true,
+              poseidonTreeBuilt: true,
+              merkleRootCalculated: true,
+              aesGcmEncrypted: true,
+              vaultRecordPersisted: true,
+              ledgerRegistrationConfirmed: true,
+            },
+            publicData: {
+              caseId: simCase.caseId,
+              merkleRootHex: simCase.merkleRoot,
+              txHash: simCase.txHash,
+              registrationTimestamp: simCase.timestamp,
+              custodian: simCase.custodian,
+            },
+          },
+        });
+        setRegResult({
+          success: true,
+          isSimulated: true,
+          caseId: simCase.caseId,
+          filename: regFileName,
+          merkleRoot: simCase.merkleRoot,
+          merkleRootHex: simCase.merkleRoot,
+          txHash: simCase.txHash,
+          timestamp: simCase.timestamp,
+          clientEncrypted: true,
+          leafFieldElement,
+          keyShares,
+        });
+        setStatusMsg({
+          type: "success",
+          text: `Case #${targetCaseId} registered! Ephemeral AES key split via Shamir 2-of-3 & Merkle Root committed on-chain. [Demonstration output]`,
+        });
+        setCaseIdInput(targetCaseId);
+        setLoading(false);
+        return;
+      }
+
+      // Live Backend Execution
       const { encryptedData, iv, authTag } = await clientEncryptAESGCMWithKey(rawBytes, keyBytes);
 
       setClientTelemetry({
@@ -517,6 +597,33 @@ const SHOWCASE_DEFAULT_CASES: OnChainCaseSummary[] = [
   const handleTransferCustody = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setLoading(true);
+
+    if (isShowcaseMode) {
+      await new Promise((r) => setTimeout(r, 400));
+      if (caseDetails) {
+        const newEvent = {
+          from: caseDetails.onChainRecord?.custodian || "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+          to: transferToAddress,
+          timestamp: Math.floor(Date.now() / 1000),
+          txHash: "0x" + Array.from(window.crypto.getRandomValues(new Uint8Array(32))).map(b => b.toString(16).padStart(2, "0")).join("").slice(0, 10) + "...demo_tx",
+        };
+        setCaseDetails({
+          ...caseDetails,
+          onChainRecord: {
+            ...caseDetails.onChainRecord,
+            custodian: transferToAddress,
+          },
+          custodyHistory: [newEvent, ...(caseDetails.custodyHistory || [])],
+        });
+      }
+      setStatusMsg({
+        type: "success",
+        text: `Custody for Case #${caseIdInput} transferred to ${transferToAddress.slice(0, 8)}... (${transferReason}) [Demonstration output]`,
+      });
+      setLoading(false);
+      return;
+    }
+
     try {
       const res = await fetch("/api/transfer-custody", {
         method: "POST",
@@ -547,6 +654,33 @@ const SHOWCASE_DEFAULT_CASES: OnChainCaseSummary[] = [
   const handleDecrypt = async () => {
     setLoading(true);
     setDecryptedFile(null);
+
+    if (isShowcaseMode) {
+      await new Promise((r) => setTimeout(r, 400));
+      if (engagedShares.length < 2) {
+        setStatusMsg({
+          type: "error",
+          text: "❌ Access Denied: 2-of-3 Shamir threshold requires at least 2 distinct officer shares. [Demonstration output]",
+        });
+      } else {
+        setDecryptedFile({
+          success: true,
+          isSimulated: true,
+          filename: caseDetails?.metadata?.filename || `Forensic_DNA_Report_C${caseIdInput}.txt`,
+          mimeType: "text/plain",
+          contentBase64: window.btoa(
+            `CONFIDENTIAL FORENSIC REPORT\nCase: #${caseIdInput}\nSubject: Crime Scene DNA & Ballistics Sample for Case #${caseIdInput}\nStatus: Cryptographically sealed via LexVault ZK protocol.\nDecrypted via simulated 2-of-3 Shamir Quorum.\n[Demonstration output]`
+          ),
+        });
+        setStatusMsg({
+          type: "success",
+          text: `✅ 2-of-3 Shamir Quorum Verified. AES-256 Key Reconstructed via Lagrange Interpolation. [Demonstration output]`,
+        });
+      }
+      setLoading(false);
+      return;
+    }
+
     try {
       const res = await fetch("/api/decrypt-evidence", {
         method: "POST",
@@ -602,7 +736,7 @@ const SHOWCASE_DEFAULT_CASES: OnChainCaseSummary[] = [
       mimeType = "text/plain";
     }
 
-    const blob = new Blob([bytes], { type: mimeType });
+    const blob = new Blob([bytes as any], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -624,6 +758,10 @@ const SHOWCASE_DEFAULT_CASES: OnChainCaseSummary[] = [
     }
   };
 
+  const handleSelectCase = (cId: string) => {
+    switchActiveCase(cId);
+  };
+
   const handleZKVerify = async (tamper: boolean) => {
     setLoading(true);
     // Explicitly reset the opposite result so there is zero ambiguity
@@ -641,6 +779,47 @@ const SHOWCASE_DEFAULT_CASES: OnChainCaseSummary[] = [
         ? `[Case #${caseIdInput}] Testing adversarial modification: injecting altered byte into ZK prover...`
         : `[Case #${caseIdInput}] Generating Groth16 ZK proof and verifying on-chain...`,
     });
+
+    if (isShowcaseMode) {
+      await new Promise((r) => setTimeout(r, 450));
+      if (tamper) {
+        const simData = {
+          isValid: false,
+          isSimulated: true,
+          isTamperRejected: true,
+          error: "Circuit assertion failed: Evidence leaf does not match registered commitment for Case #" + caseIdInput,
+        };
+        setZkTamperResult(simData);
+        setStatusMsg({
+          type: "error",
+          text: `❌ REJECTED: Modified file rejected for Case #${caseIdInput} (Circuit constraint: leaf does not match registered commitment). [Demonstration output]`,
+        });
+      } else {
+        const root = caseDetails?.onChainRecord?.merkleRoot || "0x09cfb73dca0bd9c21e329880d7bbe59465e9724a2392af7650e3cd0334551bad";
+        const simData = {
+          isValid: true,
+          isSimulated: true,
+          onChainVerified: true,
+          generationTimeMs: 495,
+          merkleRootUsed: root,
+          solidityParams: {
+            a: ["0x26c04f98129a21b3...demo_piA_1", "0x07dfb918a23d87...demo_piA_2"],
+            b: [
+              ["0x19a04f98129a21b3...demo_piB_1", "0x09dfb918a23d87...demo_piB_2"],
+              ["0x23a04f98129a21b3...demo_piB_3", "0x11dfb918a23d87...demo_piB_4"]
+            ],
+            c: ["0x12c04f98129a21b3...demo_piC_1", "0x18dfb918a23d87...demo_piC_2"]
+          }
+        };
+        setZkProofResult(simData);
+        setStatusMsg({
+          type: "success",
+          text: `✅ VALID: Evidence matches commitment registered on-chain for Case #${caseIdInput}. [Demonstration output]`,
+        });
+      }
+      setLoading(false);
+      return;
+    }
 
     try {
       const res = await fetch("/api/verify-zk", {
@@ -1864,6 +2043,12 @@ const SHOWCASE_DEFAULT_CASES: OnChainCaseSummary[] = [
                     <div className="text-[10px] text-purple-300 truncate">
                       Proof A: {JSON.stringify(zkProofResult.solidityParams?.a)}
                     </div>
+                    {zkProofResult.isSimulated && (
+                      <div className="text-[10px] text-amber-300 font-sans bg-amber-950/60 px-2.5 py-1 rounded-lg border border-amber-700/60 flex items-center gap-1.5">
+                        <span>⚠️</span>
+                        <span>Demonstration output — not a live blockchain or ZK operation.</span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1890,11 +2075,17 @@ const SHOWCASE_DEFAULT_CASES: OnChainCaseSummary[] = [
                 </button>
 
                 {zkTamperResult && (
-                  <div className="p-3.5 rounded-xl bg-rose-950/60 border border-rose-800 space-y-1 text-xs font-mono">
+                  <div className="p-3.5 rounded-xl bg-rose-950/60 border border-rose-800 space-y-1.5 text-xs font-mono">
                     <div className="text-rose-400 font-bold">❌ Soundness Verified: Proof Generation Failed</div>
                     <div className="text-[11px] text-rose-200">
                       Circuit constraint <code className="text-white">leaf === originalCommitment</code> failed locally. Tampered file rejected before reaching blockchain!
                     </div>
+                    {zkTamperResult.isSimulated && (
+                      <div className="text-[10px] text-amber-300 font-sans bg-amber-950/60 px-2.5 py-1 rounded-lg border border-amber-700/60 flex items-center gap-1.5">
+                        <span>⚠️</span>
+                        <span>Demonstration output — not a live blockchain or ZK operation.</span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

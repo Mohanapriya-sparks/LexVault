@@ -35,14 +35,34 @@ This document clearly establishes what LexVault proves, what it does not prove, 
 
 ---
 
-## 4. Shamir Secret Sharing Limitation
+## 4. ZKP Circuit Verification Limitation
 
 > [!WARNING]
-> **Prototype Key Distribution Disclosure**
-> The prototype demonstrates 2-of-3 approval and Shamir-based key reconstruction. If all shares are accessible to the same backend process or storage environment, compromise of that environment could permit key reconstruction. A production deployment should distribute shares among independent custodians, devices or approval services.
+> **ZKP Circuit Verification Invariant**
+> *The Groth16 circuit proves knowledge of a leaf and Merkle path matching the registered root. By itself, it does not prove possession of the current raw evidence file or that the file was truthful when registered. Tamper detection depends on the application correctly recomputing the fingerprint from the reviewed file and comparing it through the verification workflow.*
 
 ---
 
-## 5. Prototype Verification Qualification
+## 5. Shamir Secret Sharing Limitation
+
+> [!WARNING]
+> **Prototype Key Distribution Disclosure**
+> *The prototype demonstrates 2-of-3 approval and Shamir-based key reconstruction. If all shares are accessible to the same backend process or storage environment, compromise of that environment could permit key reconstruction. A production deployment should distribute shares among independent custodians, devices or approval services.*
+
+---
+
+## 6. Metadata Transmission Disclosure
+
+> The registration payload includes the original filename and MIME type as unencrypted metadata for investigator reference. If filename confidentiality is required, a production deployment should transmit generic categorical labels (e.g. `evidence_item_01.dat`) or client-side encrypted metadata envelopes.
+
+---
+
+## 7. Cryptographic Setup Material Disclosure
+
+> `circuits/build/pot12_final.ptau` is a **Phase 1 Powers-of-Tau artifact** (universal SRS), and `circuits/build/evidence_verifier_final.zkey` is **circuit-specific Phase 2 material**. The included trusted setup was generated locally for prototype demonstration and is not a formal multi-party production ceremony.
+
+---
+
+## 8. Prototype Verification Qualification
 
 > *LexVault passed all implemented build, smart-contract, circuit, lifecycle, isolation, security-policy and presentation-preflight checks. These results validate the hackathon prototype’s implemented behaviour; they do not constitute a professional security audit or guarantee production readiness.*

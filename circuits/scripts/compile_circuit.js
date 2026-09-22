@@ -28,6 +28,13 @@ fs.cpSync(generatedJsDir, targetJsDir, { recursive: true });
 fs.copyFileSync(path.join(circuitsDir, "evidence_verifier.r1cs"), path.join(buildDir, "evidence_verifier.r1cs"));
 fs.copyFileSync(path.join(circuitsDir, "evidence_verifier.sym"), path.join(buildDir, "evidence_verifier.sym"));
 
+// Clean up temporary root artifacts so circuits/build is the single canonical location
+try {
+    fs.rmSync(generatedJsDir, { recursive: true, force: true });
+    fs.unlinkSync(path.join(circuitsDir, "evidence_verifier.r1cs"));
+    fs.unlinkSync(path.join(circuitsDir, "evidence_verifier.sym"));
+} catch (_) {}
+
 console.log("\n=== 2. SnarkJS Powers of Tau Ceremony (POT 12) ===");
 const ptau0 = path.join(buildDir, "pot12_0000.ptau");
 const ptau1 = path.join(buildDir, "pot12_0001.ptau");

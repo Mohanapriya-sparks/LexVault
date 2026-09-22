@@ -52,7 +52,16 @@ This document details the trust assumptions, attacker capabilities, security bou
 
 ## 3. Honest Security Disclosures & Boundaries
 
-1. **Not a Proof of Real-World Truth:** LexVault guarantees mathematical integrity after digital registration. It cannot determine whether the raw video or document was authentic or manufactured (e.g., deepfake) prior to upload.
-2. **Read-Only EVM Verification:** Proof verification occurs via read-only EVM `eth_call`. It modifies no state, spends no gas, and records no transaction receipt.
-3. **Prototype Verification Qualification:**
+1. **ZKP Circuit Verification Invariant:**
+   > *“The Groth16 circuit proves knowledge of a leaf and Merkle path matching the registered root. By itself, it does not prove possession of the current raw evidence file or that the file was truthful when registered. Tamper detection depends on the application correctly recomputing the fingerprint from the reviewed file and comparing it through the verification workflow.”*
+
+2. **Metadata Transmission Disclosure:**
+   > The registration payload includes the original filename and MIME type as unencrypted metadata for investigator reference. If filename confidentiality is required, a production deployment should transmit generic categorical labels (e.g. `evidence_item_01.dat`) or client-side encrypted metadata envelopes.
+
+3. **Cryptographic Setup Disclosure:**
+   > `circuits/build/pot12_final.ptau` is a **Phase 1 Powers-of-Tau artifact** (universal SRS), and `circuits/build/evidence_verifier_final.zkey` is **circuit-specific Phase 2 material**. The included trusted setup was generated locally for prototype demonstration and is not a formal multi-party production ceremony.
+
+4. **Read-Only EVM Verification:** Proof verification occurs via read-only EVM `eth_call`. It modifies no state, spends no gas, and records no transaction receipt.
+
+5. **Prototype Verification Qualification:**
    > *LexVault passed all implemented build, smart-contract, circuit, lifecycle, isolation, security-policy and presentation-preflight checks. These results validate the hackathon prototype’s implemented behaviour; they do not constitute a professional security audit or guarantee production readiness.*
