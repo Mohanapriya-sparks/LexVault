@@ -144,7 +144,7 @@ export const ShamirQuorumCounter: React.FC<ShamirQuorumCounterProps> = ({
             <ul className="text-slate-400 space-y-0.5 list-disc list-inside text-[10px]">
               <li>Off-chain 2-of-3 threshold quorum layer</li>
               <li>Reconstructs AES-256-GCM symmetric key</li>
-              <li>Requires 2 independent authorised signatures</li>
+              <li>Requires 2 independent authorised role shares</li>
               <li><strong>Reveals plaintext only to authorised reviewer</strong></li>
             </ul>
           </div>

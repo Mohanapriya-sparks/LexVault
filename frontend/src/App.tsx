@@ -103,6 +103,93 @@ async function clientEncryptAESGCMWithKey(data: Uint8Array, keyBytes: Uint8Array
   };
 }
 
+// Convert Base64 to Uint8Array
+function base64ToUint8Array(base64: string): Uint8Array {
+  const binaryString = window.atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
+const ROLE_INDEX_MAP: Record<string, bigint> = {
+  "Investigator": 1n,
+  "Forensic Officer": 2n,
+  "Court Reviewer": 3n,
+};
+
+function modPow(base: bigint, exp: bigint, mod: bigint): bigint {
+  let res = 1n;
+  base = ((base % mod) + mod) % mod;
+  while (exp > 0n) {
+    if (exp % 2n === 1n) res = (res * base) % mod;
+    base = (base * base) % mod;
+    exp = exp / 2n;
+  }
+  return res;
+}
+
+function modInverse(a: bigint, mod: bigint): bigint {
+  return modPow(a, mod - 2n, mod);
+}
+
+// Reconstruct ephemeral AES-256 key via Lagrange interpolation in BN128 scalar field
+function reconstructShamirKeyBrowser(shares: Array<[bigint, bigint]>): Uint8Array {
+  if (shares.length < 2) {
+    throw new Error("Shamir 2-of-3 threshold requires at least 2 distinct role shares.");
+  }
+  const [x1, y1] = shares[0];
+  const [x2, y2] = shares[1];
+  if (x1 === x2) {
+    throw new Error("Duplicate role share index provided.");
+  }
+
+  const p = SNARK_FIELD_PRIME;
+  const l1 = (((0n - x2) * modInverse(x1 - x2, p)) % p + p) % p;
+  const l2 = (((0n - x1) * modInverse(x2 - x1, p)) % p + p) % p;
+  const secretBigInt = (((y1 * l1) % p + (y2 * l2) % p) % p + p) % p;
+
+  const hex = secretBigInt.toString(16).padStart(64, "0");
+  const keyBytes = new Uint8Array(32);
+  for (let i = 0; i < 32; i++) {
+    keyBytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+  }
+  return keyBytes;
+}
+
+// Client-side AES-256-GCM decryption with reconstructed key
+async function clientDecryptAESGCMWithKey(
+  encryptedBase64: string,
+  ivBase64: string,
+  authTagBase64: string,
+  keyBytes: Uint8Array
+): Promise<Uint8Array> {
+  const key = await window.crypto.subtle.importKey(
+    "raw",
+    keyBytes as any,
+    { name: "AES-GCM" },
+    false,
+    ["decrypt"]
+  );
+
+  const ciphertextBytes = base64ToUint8Array(encryptedBase64);
+  const tagBytes = base64ToUint8Array(authTagBase64);
+  const ivBytes = base64ToUint8Array(ivBase64);
+
+  const combined = new Uint8Array(ciphertextBytes.length + tagBytes.length);
+  combined.set(ciphertextBytes, 0);
+  combined.set(tagBytes, ciphertextBytes.length);
+
+  const decryptedBuffer = await window.crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: ivBytes as any, tagLength: 128 },
+    key,
+    combined as any
+  );
+
+  return new Uint8Array(decryptedBuffer);
+}
+
 function UnregisteredCaseNotice({
   caseId,
   onGoToRegister,
@@ -220,13 +307,100 @@ export default function App() {
     }
   };
 
+  const isShowcaseMode = (typeof window !== "undefined" && (
+    (import.meta as any).env?.VITE_SHOWCASE_MODE === "true" ||
+    window.location.hostname.includes("github.io") ||
+    window.location.search.includes("showcase=true") ||
+    (import.meta as any).env?.PROD === true
+  ));
+
+  interface TemporaryShowcaseEvidence {
+    caseId: number;
+    filename: string;
+    mimeType: string;
+    rawText?: string;
+    rawBytes?: Uint8Array;
+    encryptedData: string;
+    iv: string;
+    authTag: string;
+    leafFieldElement: string;
+    keyShares: Record<string, string>;
+    keyBytes: Uint8Array;
+  }
+
+  const [showcaseStore, setShowcaseStore] = useState<Record<number, TemporaryShowcaseEvidence>>({});
+
+  // Initialize temporary in-memory Web Crypto records for sample showcase cases
   useEffect(() => {
-    fetchAvailableCases();
-    fetchCaseDetails(caseIdInput);
-    fetchCircuitInfo();
-  }, [caseIdInput]);
+    if (!isShowcaseMode) return;
+    async function seedShowcaseStore() {
+      const sampleCases = [
+        {
+          caseId: 101,
+          filename: "Forensic_Ballistics_DNA_Report.pdf",
+          mimeType: "text/plain",
+          content: "CONFIDENTIAL FORENSIC REPORT\nCase ID: #101\nSubject: Crime Scene DNA & Ballistics Sample\nChain of Custody: Verified via LexVault ZK-SNARK\nStatus: Unmodified",
+        },
+        {
+          caseId: 102,
+          filename: "Surveillance_CCTV_Sector7.mp4",
+          mimeType: "text/plain",
+          content: "CONFIDENTIAL SURVEILLANCE FEED\nCase ID: #102\nSubject: Sector 7 Entryway CCTV Camera Footage\nIntegrity: Unbroken cryptographic seal",
+        },
+        {
+          caseId: 103,
+          filename: "Forensic_DNA_Sample_C103.txt",
+          mimeType: "text/plain",
+          content: "CONFIDENTIAL EVIDENCE FILE CONTENT FOR CASE #103\nDNA Match: 99.98% Confidence\nBallistics: Caliber 9x19mm Parabellum match confirmed.",
+        },
+        {
+          caseId: 107,
+          filename: "Forensic_DNA_Report_C107.txt",
+          mimeType: "text/plain",
+          content: "CONFIDENTIAL FORENSIC REPORT\nCase: #107\nSubject: Crime Scene DNA & Ballistics Sample\nChain of Custody: Verified via LexVault ZK-SNARK\nStatus: Unmodified",
+        },
+      ];
+
+      const newStore: Record<number, TemporaryShowcaseEvidence> = {};
+      for (const sc of sampleCases) {
+        const rawBytes = new TextEncoder().encode(sc.content);
+        const { leafFieldElement } = await sha256ToFieldElementBrowser(rawBytes);
+        const { keyBytes, keyShares } = generateClientShamirKeyAndShares();
+        const { encryptedData, iv, authTag } = await clientEncryptAESGCMWithKey(rawBytes, keyBytes);
+        newStore[sc.caseId] = {
+          caseId: sc.caseId,
+          filename: sc.filename,
+          mimeType: sc.mimeType,
+          rawText: sc.content,
+          rawBytes,
+          encryptedData,
+          iv,
+          authTag,
+          leafFieldElement,
+          keyShares,
+          keyBytes,
+        };
+      }
+      setShowcaseStore(newStore);
+    }
+    seedShowcaseStore().catch(console.error);
+  }, [isShowcaseMode]);
 
   const fetchCircuitInfo = async () => {
+    if (isShowcaseMode) {
+      setCircuitInfo({
+        success: true,
+        circuit: "evidence_verifier.circom",
+        provingSystem: "Groth16 (snarkjs)",
+        curve: "BN128 / alt_bn128",
+        constraints: 1560,
+        publicInputs: ["merkleRoot"],
+        privateInputs: ["leaf", "originalCommitment", "merklePath[3]", "pathIndices[3]"],
+        circuitHash: "DEMO-CIRCUIT-HASH-BN128-1560",
+        verifierShape: "Shape A (uint256[1] calldata input)",
+      });
+      return;
+    }
     try {
       const res = await fetch("/api/circuit-info");
       if (res.ok) {
@@ -270,7 +444,7 @@ const SHOWCASE_DEFAULT_CASES: OnChainCaseSummary[] = [
     timestamp: Date.now() - 7200000,
     custodyEventCount: 2,
     registrationBlock: 1,
-    txHash: "0x39a04f...demo_tx",
+    txHash: "DEMO-TX-001-REGISTRATION",
   },
   {
     caseId: 102,
@@ -280,7 +454,7 @@ const SHOWCASE_DEFAULT_CASES: OnChainCaseSummary[] = [
     timestamp: Date.now() - 5400000,
     custodyEventCount: 0,
     registrationBlock: 2,
-    txHash: "0x48b12e...demo_tx",
+    txHash: "DEMO-TX-002-REGISTRATION",
   },
   {
     caseId: 103,
@@ -290,7 +464,7 @@ const SHOWCASE_DEFAULT_CASES: OnChainCaseSummary[] = [
     timestamp: Date.now() - 3600000,
     custodyEventCount: 1,
     registrationBlock: 3,
-    txHash: "0x57c23a...demo_tx",
+    txHash: "DEMO-TX-003-REGISTRATION",
   },
   {
     caseId: 107,
@@ -300,11 +474,9 @@ const SHOWCASE_DEFAULT_CASES: OnChainCaseSummary[] = [
     timestamp: Date.now() - 1800000,
     custodyEventCount: 1,
     registrationBlock: 4,
-    txHash: "0x66d34b...demo_tx",
+    txHash: "DEMO-TX-007-REGISTRATION",
   },
 ];
-
-  const isShowcaseMode = (import.meta as any).env?.VITE_SHOWCASE_MODE === "true" || (typeof window !== "undefined" && window.location.hostname.includes("github.io"));
 
   const fetchAvailableCases = async () => {
     if (isShowcaseMode) {
@@ -337,65 +509,125 @@ const SHOWCASE_DEFAULT_CASES: OnChainCaseSummary[] = [
 
   const fetchCaseDetails = async (id: string) => {
     setCaseDetails(null);
-    if (!isShowcaseMode) {
-      try {
-        const res = await fetch(`/api/case/${id}`);
-        if (res.ok) {
-          const data = await res.json();
-          setCaseDetails(data);
-          return;
-        }
-      } catch {
-        // Fallback for static showcase deployment
-      }
-    }
-    const fallback = SHOWCASE_DEFAULT_CASES.find((c) => c.caseId.toString() === id);
-    if (fallback) {
-      setCaseDetails({
-        caseId: fallback.caseId,
-        isRegistered: true,
-        onChainRecord: {
-          merkleRoot: fallback.merkleRoot,
-          timestamp: Math.floor(fallback.timestamp / 1000),
-          custodian: fallback.custodian,
-        },
-        metadata: {
-          filename: `Evidence_${fallback.evidenceLabel.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`,
-          mimeType: "application/pdf",
-          registeredAt: fallback.timestamp,
-        },
-        custodyHistory: [
-          {
-            from: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-            to: fallback.custodian,
+    if (isShowcaseMode) {
+      const caseIdNum = parseInt(id);
+      const stored = showcaseStore[caseIdNum];
+      const fallback = SHOWCASE_DEFAULT_CASES.find((c) => c.caseId.toString() === id);
+      if (stored) {
+        setCaseDetails({
+          caseId: stored.caseId,
+          isRegistered: true,
+          onChainRecord: {
+            merkleRoot: fallback?.merkleRoot || "0x09cfb73dca0bd9c21e329880d7bbe59465e9724a2392af7650e3cd0334551bad",
+            timestamp: Math.floor(Date.now() / 1000),
+            custodian: fallback?.custodian || "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+          },
+          metadata: {
+            filename: stored.filename,
+            mimeType: stored.mimeType,
+            registeredAt: Date.now(),
+          },
+          custodyHistory: (fallback?.custodyEventCount || 0) > 0 ? [
+            {
+              from: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+              to: fallback?.custodian || "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+              timestamp: Math.floor((Date.now() - 3600000) / 1000),
+              signature: "0x_demo_sample_custody_transfer_auth_sig_01",
+              txHash: fallback?.txHash || "DEMO-TX-CUSTODY-TRANSFER",
+            },
+          ] : [],
+          receipt: {
+            isSimulated: true,
+            caseId: stored.caseId,
+            operations: {
+              rawEvidenceReceived: true,
+              sha256FingerprintGenerated: true,
+              fieldLeafDerived: true,
+              poseidonTreeBuilt: true,
+              merkleRootCalculated: true,
+              aesGcmEncrypted: true,
+              vaultRecordPersisted: true,
+              ledgerRegistrationConfirmed: true,
+            },
+            publicData: {
+              caseId: stored.caseId,
+              merkleRootHex: fallback?.merkleRoot || "0x...",
+              txHash: fallback?.txHash || "DEMO-TX-REGISTRATION",
+              registrationTimestamp: Date.now(),
+              custodian: fallback?.custodian || "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+            },
+          },
+        });
+        return;
+      } else if (fallback) {
+        setCaseDetails({
+          caseId: fallback.caseId,
+          isRegistered: true,
+          onChainRecord: {
+            merkleRoot: fallback.merkleRoot,
             timestamp: Math.floor(fallback.timestamp / 1000),
-            txHash: "0x39a04f...demo_tx",
-          },
-        ],
-        receipt: {
-          operations: {
-            rawEvidenceReceived: true,
-            sha256FingerprintGenerated: true,
-            fieldLeafDerived: true,
-            poseidonTreeBuilt: true,
-            merkleRootCalculated: true,
-            aesGcmEncrypted: true,
-            vaultRecordPersisted: true,
-            ledgerRegistrationConfirmed: true,
-          },
-          publicData: {
-            caseId: fallback.caseId,
-            merkleRootHex: fallback.merkleRoot,
-            txHash: "0x39a04f...demo_tx",
-            registrationTimestamp: fallback.timestamp,
             custodian: fallback.custodian,
           },
-        },
-      });
-    } else {
-      setCaseDetails(null);
+          metadata: {
+            filename: `Evidence_${fallback.evidenceLabel.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`,
+            mimeType: "application/pdf",
+            registeredAt: fallback.timestamp,
+          },
+          custodyHistory: [
+            {
+              from: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+              to: fallback.custodian,
+              timestamp: Math.floor(fallback.timestamp / 1000),
+              signature: "0x_demo_sample_custody_transfer_auth_sig_02",
+              txHash: fallback.txHash,
+            },
+          ],
+          receipt: {
+            isSimulated: true,
+            caseId: fallback.caseId,
+            operations: {
+              rawEvidenceReceived: true,
+              sha256FingerprintGenerated: true,
+              fieldLeafDerived: true,
+              poseidonTreeBuilt: true,
+              merkleRootCalculated: true,
+              aesGcmEncrypted: true,
+              vaultRecordPersisted: true,
+              ledgerRegistrationConfirmed: true,
+            },
+            publicData: {
+              caseId: fallback.caseId,
+              merkleRootHex: fallback.merkleRoot,
+              txHash: fallback.txHash,
+              registrationTimestamp: fallback.timestamp,
+              custodian: fallback.custodian,
+            },
+          },
+        });
+        return;
+      } else {
+        setCaseDetails(null);
+        return;
+      }
+    }
+
+    try {
+      const res = await fetch(`/api/case/${id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setCaseDetails(data);
+        return;
+      }
+    } catch {
+      // Fallback for offline/static deployment
     }
   };
+
+  useEffect(() => {
+    fetchAvailableCases();
+    fetchCaseDetails(caseIdInput);
+    fetchCircuitInfo();
+  }, [caseIdInput, showcaseStore]);
 
   const handleRegCaseIdChange = (newId: string) => {
     setRegCaseId(newId);
@@ -456,21 +688,71 @@ const SHOWCASE_DEFAULT_CASES: OnChainCaseSummary[] = [
 
       const { hexHash, leafFieldElement } = await sha256ToFieldElementBrowser(rawBytes);
       const { keyBytes, keyShares } = generateClientShamirKeyAndShares();
+      const { encryptedData, iv, authTag } = await clientEncryptAESGCMWithKey(rawBytes, keyBytes);
+
+      setClientTelemetry({
+        sha256Hex: hexHash,
+        leafFieldElement,
+        keyShares,
+      });
 
       if (isShowcaseMode) {
         await new Promise((r) => setTimeout(r, 450));
+        const simCaseId = parseInt(targetCaseId);
         const simulatedRoot = "0x" + Array.from(window.crypto.getRandomValues(new Uint8Array(32))).map(b => b.toString(16).padStart(2, "0")).join("");
+        const simTxHash = `DEMO-TX-REG-${simCaseId}`;
         const simCase = {
-          caseId: parseInt(targetCaseId),
+          caseId: simCaseId,
           merkleRoot: simulatedRoot,
           custodian: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
           evidenceLabel: inputType === "file" ? regFileName : `Evidence Item #${targetCaseId}`,
           timestamp: Date.now(),
           custodyEventCount: 0,
           registrationBlock: 5,
-          txHash: "0x" + Array.from(window.crypto.getRandomValues(new Uint8Array(32))).map(b => b.toString(16).padStart(2, "0")).join("").slice(0, 10) + "...demo_tx",
+          txHash: simTxHash,
         };
+
+        // Save into temporary React memory store for real client-side decryption
+        setShowcaseStore(prev => ({
+          ...prev,
+          [simCaseId]: {
+            caseId: simCaseId,
+            filename: regFileName,
+            mimeType: regMimeType,
+            rawText: inputType === "text" ? regFileContent : undefined,
+            rawBytes,
+            encryptedData,
+            iv,
+            authTag,
+            leafFieldElement,
+            keyShares,
+            keyBytes,
+          }
+        }));
+
         setAvailableCases(prev => [simCase, ...prev.filter(c => c.caseId !== simCase.caseId)]);
+        const simReceipt = {
+          isSimulated: true,
+          caseId: simCase.caseId,
+          operations: {
+            rawEvidenceReceived: true,
+            sha256FingerprintGenerated: true,
+            fieldLeafDerived: true,
+            poseidonTreeBuilt: true,
+            merkleRootCalculated: true,
+            aesGcmEncrypted: true,
+            vaultRecordPersisted: true,
+            ledgerRegistrationConfirmed: true,
+          },
+          publicData: {
+            caseId: simCase.caseId,
+            merkleRootHex: simCase.merkleRoot,
+            txHash: simCase.txHash,
+            registrationTimestamp: simCase.timestamp,
+            custodian: simCase.custodian,
+          },
+        };
+
         setCaseDetails({
           caseId: simCase.caseId,
           isRegistered: true,
@@ -485,26 +767,9 @@ const SHOWCASE_DEFAULT_CASES: OnChainCaseSummary[] = [
             registeredAt: simCase.timestamp,
           },
           custodyHistory: [],
-          receipt: {
-            operations: {
-              rawEvidenceReceived: true,
-              sha256FingerprintGenerated: true,
-              fieldLeafDerived: true,
-              poseidonTreeBuilt: true,
-              merkleRootCalculated: true,
-              aesGcmEncrypted: true,
-              vaultRecordPersisted: true,
-              ledgerRegistrationConfirmed: true,
-            },
-            publicData: {
-              caseId: simCase.caseId,
-              merkleRootHex: simCase.merkleRoot,
-              txHash: simCase.txHash,
-              registrationTimestamp: simCase.timestamp,
-              custodian: simCase.custodian,
-            },
-          },
+          receipt: simReceipt,
         });
+
         setRegResult({
           success: true,
           isSimulated: true,
@@ -517,7 +782,10 @@ const SHOWCASE_DEFAULT_CASES: OnChainCaseSummary[] = [
           clientEncrypted: true,
           leafFieldElement,
           keyShares,
+          receipt: simReceipt,
         });
+        setCryptoReceiptData(simReceipt);
+
         setStatusMsg({
           type: "success",
           text: `Case #${targetCaseId} registered! Ephemeral AES key split via Shamir 2-of-3 & Merkle Root committed on-chain. [Demonstration output]`,
@@ -528,14 +796,6 @@ const SHOWCASE_DEFAULT_CASES: OnChainCaseSummary[] = [
       }
 
       // Live Backend Execution
-      const { encryptedData, iv, authTag } = await clientEncryptAESGCMWithKey(rawBytes, keyBytes);
-
-      setClientTelemetry({
-        sha256Hex: hexHash,
-        leafFieldElement,
-        keyShares,
-      });
-
       const res = await fetch("/api/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -601,11 +861,13 @@ const SHOWCASE_DEFAULT_CASES: OnChainCaseSummary[] = [
     if (isShowcaseMode) {
       await new Promise((r) => setTimeout(r, 400));
       if (caseDetails) {
+        const simTransferTx = `DEMO-TX-TRANS-${Date.now().toString().slice(-6)}`;
         const newEvent = {
           from: caseDetails.onChainRecord?.custodian || "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
           to: transferToAddress,
           timestamp: Math.floor(Date.now() / 1000),
-          txHash: "0x" + Array.from(window.crypto.getRandomValues(new Uint8Array(32))).map(b => b.toString(16).padStart(2, "0")).join("").slice(0, 10) + "...demo_tx",
+          signature: `0x_signed_handoff_from_${transferFromRole.replace(/\s+/g, '_')}_to_${transferToAddress.slice(0, 8)}_time_${Date.now()}`,
+          txHash: simTransferTx,
         };
         setCaseDetails({
           ...caseDetails,
@@ -615,6 +877,11 @@ const SHOWCASE_DEFAULT_CASES: OnChainCaseSummary[] = [
           },
           custodyHistory: [newEvent, ...(caseDetails.custodyHistory || [])],
         });
+        setAvailableCases(prev => prev.map(c => c.caseId.toString() === caseIdInput ? {
+          ...c,
+          custodian: transferToAddress,
+          custodyEventCount: (c.custodyEventCount || 0) + 1,
+        } : c));
       }
       setStatusMsg({
         type: "success",
@@ -657,19 +924,73 @@ const SHOWCASE_DEFAULT_CASES: OnChainCaseSummary[] = [
 
     if (isShowcaseMode) {
       await new Promise((r) => setTimeout(r, 400));
+      if (activeRoleForDecryption === "Intern") {
+        setStatusMsg({
+          type: "error",
+          text: "❌ Access Denied: Intern role is not authorized to decrypt evidence (Read-Only Audit role). [Demonstration output]",
+        });
+        setLoading(false);
+        return;
+      }
+
       if (engagedShares.length < 2) {
         setStatusMsg({
           type: "error",
-          text: "❌ Access Denied: 2-of-3 Shamir threshold requires at least 2 distinct officer shares. [Demonstration output]",
+          text: "❌ Quorum Not Reached: 2-of-3 Shamir threshold requires at least 2 distinct officer shares. [Demonstration output]",
         });
+        setLoading(false);
+        return;
+      }
+
+      const caseIdNum = parseInt(caseIdInput);
+      const stored = showcaseStore[caseIdNum];
+      if (stored && stored.keyShares) {
+        try {
+          // Genuine Lagrange interpolation using distinct role shares in BN128 scalar field
+          const sharesToUse: Array<[bigint, bigint]> = engagedShares.slice(0, 2).map((roleName) => {
+            const roleIdx = ROLE_INDEX_MAP[roleName] || 1n;
+            const shareVal = stored.keyShares[roleName] || stored.keyShares["Investigator"];
+            return [roleIdx, BigInt(shareVal)];
+          });
+
+          const reconstructedKeyBytes = reconstructShamirKeyBrowser(sharesToUse);
+          const decryptedBytes = await clientDecryptAESGCMWithKey(
+            stored.encryptedData,
+            stored.iv,
+            stored.authTag,
+            reconstructedKeyBytes
+          );
+
+          const decryptedText = new TextDecoder().decode(decryptedBytes);
+          setDecryptedFile({
+            success: true,
+            isSimulated: true,
+            isRealBrowserCrypto: true,
+            filename: stored.filename,
+            mimeType: stored.mimeType,
+            contentBase64: uint8ArrayToBase64(decryptedBytes),
+            decryptedText,
+          });
+          setStatusMsg({
+            type: "success",
+            text: `✅ 2-of-3 Shamir Quorum Verified. AES-256 Key Reconstructed via Lagrange Interpolation & Decrypted via Web Crypto. [Demonstration output]`,
+          });
+        } catch (decryptErr: any) {
+          console.error("Showcase decryption error:", decryptErr);
+          setStatusMsg({
+            type: "error",
+            text: `❌ Decryption failed: ${decryptErr.message}`,
+          });
+        }
       } else {
+        // Fallback simulated decryption
         setDecryptedFile({
           success: true,
           isSimulated: true,
           filename: caseDetails?.metadata?.filename || `Forensic_DNA_Report_C${caseIdInput}.txt`,
           mimeType: "text/plain",
           contentBase64: window.btoa(
-            `CONFIDENTIAL FORENSIC REPORT\nCase: #${caseIdInput}\nSubject: Crime Scene DNA & Ballistics Sample for Case #${caseIdInput}\nStatus: Cryptographically sealed via LexVault ZK protocol.\nDecrypted via simulated 2-of-3 Shamir Quorum.\n[Demonstration output]`
+            `CONFIDENTIAL FORENSIC REPORT\nCase: #${caseIdInput}\nSubject: Crime Scene DNA & Ballistics Sample for Case #${caseIdInput}\nStatus: Cryptographically sealed via LexVault ZK protocol.\nDecrypted via 2-of-3 Shamir Quorum.\n[Demonstration output]`
           ),
         });
         setStatusMsg({
@@ -787,6 +1108,7 @@ const SHOWCASE_DEFAULT_CASES: OnChainCaseSummary[] = [
           isValid: false,
           isSimulated: true,
           isTamperRejected: true,
+          verificationMode: "simulated-showcase",
           error: "Circuit assertion failed: Evidence leaf does not match registered commitment for Case #" + caseIdInput,
         };
         setZkTamperResult(simData);
@@ -799,16 +1121,16 @@ const SHOWCASE_DEFAULT_CASES: OnChainCaseSummary[] = [
         const simData = {
           isValid: true,
           isSimulated: true,
-          onChainVerified: true,
+          verificationMode: "simulated-showcase",
           generationTimeMs: 495,
           merkleRootUsed: root,
           solidityParams: {
-            a: ["0x26c04f98129a21b3...demo_piA_1", "0x07dfb918a23d87...demo_piA_2"],
+            a: ["DEMO-PI-A-1", "DEMO-PI-A-2"],
             b: [
-              ["0x19a04f98129a21b3...demo_piB_1", "0x09dfb918a23d87...demo_piB_2"],
-              ["0x23a04f98129a21b3...demo_piB_3", "0x11dfb918a23d87...demo_piB_4"]
+              ["DEMO-PI-B-1", "DEMO-PI-B-2"],
+              ["DEMO-PI-B-3", "DEMO-PI-B-4"]
             ],
-            c: ["0x12c04f98129a21b3...demo_piC_1", "0x18dfb918a23d87...demo_piC_2"]
+            c: ["DEMO-PI-C-1", "DEMO-PI-C-2"]
           }
         };
         setZkProofResult(simData);
@@ -922,9 +1244,9 @@ const SHOWCASE_DEFAULT_CASES: OnChainCaseSummary[] = [
             Public Showcase Mode
           </span>
           <span>
-            Public Showcase Mode — Interactive demonstration using sample data. Cryptographic operations displayed here are simulated. Run the full project locally for real Circom proof generation and EVM verification. See the{" "}
+            Public Showcase Mode — Interactive demonstration using sample data. Browser cryptographic operations are identified separately from simulated blockchain and ZK outputs. Run the full project locally for real Circom proof generation and EVM verification. See the{" "}
             <a
-              href="https://github.com/Mohanapriya-sparks/lexvault#local-setup-and-quickstart"
+              href="https://github.com/Mohanapriya-sparks/LexVault#local-setup-and-quickstart"
               target="_blank"
               rel="noreferrer"
               className="underline text-white font-semibold hover:text-cyan-300 transition"
@@ -1541,15 +1863,15 @@ const SHOWCASE_DEFAULT_CASES: OnChainCaseSummary[] = [
                       >
                         <div className="space-y-1">
                           <div className="text-xs text-cyan-400 font-mono flex items-center gap-2 font-bold">
-                            <span>From: {h.from.slice(0, 8)}...</span>
+                            <span>From: {h.from ? h.from.slice(0, 8) : "0x..."}...</span>
                             <span>➔</span>
-                            <span>To: {h.to.slice(0, 8)}...</span>
+                            <span>To: {h.to ? h.to.slice(0, 8) : "0x..."}...</span>
                           </div>
                           <div className="text-[10px] text-slate-500 font-mono">
-                            Timestamp: {new Date(h.timestamp * 1000).toLocaleString()}
+                            Timestamp: {new Date((h.timestamp || Date.now() / 1000) * 1000).toLocaleString()}
                           </div>
                           <div className="text-[10px] text-slate-400 font-mono truncate max-w-sm">
-                            Sig: {h.signature.slice(0, 32)}...
+                            Auth Payload: {(h.signature || h.txHash || "0x_custody_transfer_authenticated").slice(0, 32)}...
                           </div>
                         </div>
                         <span className="text-[10px] px-2.5 py-1 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800 font-mono font-bold">
@@ -2044,8 +2366,10 @@ const SHOWCASE_DEFAULT_CASES: OnChainCaseSummary[] = [
                       Proof A: {JSON.stringify(zkProofResult.solidityParams?.a)}
                     </div>
                     {zkProofResult.isSimulated && (
-                      <div className="text-[10px] text-amber-300 font-sans bg-amber-950/60 px-2.5 py-1 rounded-lg border border-amber-700/60 flex items-center gap-1.5">
-                        <span>⚠️</span>
+                      <div className="text-[10px] text-amber-300 font-sans bg-amber-950/60 px-2.5 py-1 rounded-lg border border-amber-700/60 flex items-center gap-1.5 flex-wrap">
+                        <span className="px-1.5 py-0.2 rounded bg-amber-900/80 border border-amber-600/60 font-bold font-mono text-amber-200 uppercase text-[9px]">
+                          SIMULATED — Showcase Only
+                        </span>
                         <span>Demonstration output — not a live blockchain or ZK operation.</span>
                       </div>
                     )}

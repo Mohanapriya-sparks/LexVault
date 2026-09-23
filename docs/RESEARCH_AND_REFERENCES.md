@@ -31,9 +31,13 @@ LexVault builds upon established academic literature in zero-knowledge cryptogra
 ## 3. Electronic Evidence & Chain of Custody Standards
 
 5. **NIST Special Publication (SP) 800-86.** *"Guide to Integrating Forensic Techniques into Incident Response."*
-   - National Institute of Standards and Technology (NIST).
+   - National Institute of Standards and Technology (NIST). [NIST SP 800-86](https://csrc.nist.gov/publications/detail/sp/800-86/final).
    - *Application in LexVault:* Informs the sequential custody log schema, cryptographically linking time, custodian identity, and transfer intent.
 
-6. **ISO/IEC 27037:2012.** *"Information technology — Security techniques — Guidelines for identification, collection, acquisition and preservation of digital evidence."*
-   - International Organization for Standardization.
+6. **NIST Interagency Report (IR) 8387.** *"Digital Evidence Preservation: Considerations for Evidence Handlers."*
+   - National Institute of Standards and Technology (NIST). [NIST IR 8387](https://csrc.nist.gov/publications/detail/nistir/8387/final).
+   - *Application in LexVault:* Informs the tamper-evident Merkle commitment anchoring and distributed audit logging model.
+
+7. **ISO/IEC 27037:2012.** *"Information technology — Security techniques — Guidelines for identification, collection, acquisition and preservation of digital evidence."*
+   - International Organization for Standardization. [ISO/IEC 27037:2012 Catalogue](https://www.iso.org/standard/44381.html).
    - *Application in LexVault:* Guides the post-registration integrity invariant and tamper-evident audit record formatting.

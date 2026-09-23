@@ -38,12 +38,11 @@ jobs:
         working-directory: ./frontend
         env:
           VITE_SHOWCASE_MODE: "true"
+          VITE_BASE_PATH: "/LexVault/"
         run: npm run build
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       - name: Upload Artifact
         uses: actions/upload-pages-artifact@v3

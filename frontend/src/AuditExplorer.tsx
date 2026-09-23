@@ -149,11 +149,82 @@ export function ProvenanceStatusChecklistView({
   const [activeEventTab, setActiveEventTab] = useState<"checklist" | "events">("checklist");
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
 
+  const isShowcase = (typeof window !== "undefined" && (
+    (import.meta as any).env?.VITE_SHOWCASE_MODE === "true" ||
+    window.location.hostname.includes("github.io") ||
+    window.location.search.includes("showcase=true") ||
+    (import.meta as any).env?.PROD === true
+  ));
+
   useEffect(() => {
     let isMounted = true;
     async function loadData() {
       try {
         setLoading(true);
+        if (isShowcase) {
+          // Synthesize showcase provenance and events locally without network errors
+          setChecklist({
+            merkleRootRegistered: true,
+            evidenceEncrypted: true,
+            hasCustodyEvents: caseId === 101 || caseId === 103 || caseId === 107,
+            custodyEventCount: caseId === 101 ? 2 : (caseId === 103 || caseId === 107 ? 1 : 0),
+            mostRecentZkProof: caseId === 101 ? "VALID" : "NOT_VERIFIED",
+            decryptionApprovalsSatisfied: caseId === 101,
+          });
+          setEvents([
+            {
+              id: `evt_reg_${caseId}_sample`,
+              eventType: "EVIDENCE_REGISTERED",
+              caseId,
+              timestamp: Date.now() - 7200000,
+              details: {
+                custodian: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+                txHash: `DEMO-TX-REG-${caseId}`,
+                blockNumber: 1,
+              },
+            },
+            ...(caseId === 101 ? [
+              {
+                id: `evt_trans_${caseId}_1`,
+                eventType: "CUSTODY_TRANSFERRED" as const,
+                caseId,
+                timestamp: Date.now() - 5400000,
+                details: {
+                  from: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+                  to: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+                  txHash: `DEMO-TX-TRANS-1`,
+                  blockNumber: 2,
+                },
+              },
+              {
+                id: `evt_trans_${caseId}_2`,
+                eventType: "CUSTODY_TRANSFERRED" as const,
+                caseId,
+                timestamp: Date.now() - 3600000,
+                details: {
+                  from: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+                  to: "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+                  txHash: `DEMO-TX-TRANS-2`,
+                  blockNumber: 3,
+                },
+              },
+              {
+                id: `evt_zk_${caseId}_1`,
+                eventType: "ZK_PROOF_VERIFIED" as const,
+                caseId,
+                timestamp: Date.now() - 1800000,
+                details: {
+                  provingSystem: "Groth16",
+                  verifiedVia: "eth_call (read-only)",
+                  result: "VALID",
+                },
+              }
+            ] : [])
+          ]);
+          setLoading(false);
+          return;
+        }
+
         const [provRes, evtRes] = await Promise.all([
           fetch(`/api/provenance/${caseId}`),
           fetch(`/api/events/${caseId}`),
@@ -178,7 +249,7 @@ export function ProvenanceStatusChecklistView({
     return () => {
       isMounted = false;
     };
-  }, [caseId]);
+  }, [caseId, isShowcase]);
 
   const eventBadgeStyle = (type: string) => {
     switch (type) {
@@ -893,6 +964,42 @@ export function CaseRegistryDashboard({
 
   const openAuditModal = async (caseId: number) => {
     setModalLoading(true);
+    const isShowcaseMode = typeof window !== "undefined" && (
+      (import.meta as any).env?.VITE_SHOWCASE_MODE === "true" ||
+      window.location.hostname.includes("github.io") ||
+      window.location.search.includes("showcase=true") ||
+      (import.meta as any).env?.PROD === true
+    );
+    if (isShowcaseMode) {
+      const match = cases.find((c) => c.caseId === caseId);
+      setSelectedCaseForModal({
+        caseId,
+        isRegistered: true,
+        evidenceLabel: match?.evidenceLabel || `Evidence Item #${caseId}`,
+        onChainRecord: {
+          merkleRoot: match?.merkleRoot || "0x00",
+          timestamp: Math.floor((match?.timestamp || Date.now()) / 1000),
+          custodian: match?.custodian || "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        },
+        custodyHistory: (match?.custodyEventCount || 0) > 0 ? [
+          {
+            eventIndex: 1,
+            from: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+            to: match?.custodian || "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+            timestamp: Math.floor(((match?.timestamp || Date.now()) - 3600000) / 1000),
+            transactionType: "Ledger-Authenticated Transaction",
+            signature: "DEMO-SIG",
+          }
+        ] : [],
+        registrationTxHash: match?.txHash || `DEMO-TX-REG-${caseId}`,
+        registrationBlock: match?.registrationBlock || 1,
+        contractAddress: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+        chainId: 31337,
+        snapshotBlock: 1,
+      });
+      setModalLoading(false);
+      return;
+    }
     try {
       const res = await fetch(`/api/case/${caseId}`);
       if (res.ok) {

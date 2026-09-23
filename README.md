@@ -10,8 +10,8 @@
 
 ---
 
-[![CI](https://github.com/Mohanapriya-sparks/lexvault/actions/workflows/ci.yml/badge.svg)](https://github.com/Mohanapriya-sparks/lexvault/actions/workflows/ci.yml)
-[![Pages Showcase](https://github.com/Mohanapriya-sparks/lexvault/actions/workflows/pages.yml/badge.svg)](https://mohanapriya-sparks.github.io/lexvault/)
+[![CI](https://github.com/Mohanapriya-sparks/LexVault/actions/workflows/ci.yml/badge.svg)](https://github.com/Mohanapriya-sparks/LexVault/actions/workflows/ci.yml)
+[![Pages Showcase](https://github.com/Mohanapriya-sparks/LexVault/actions/workflows/pages.yml/badge.svg)](https://mohanapriya-sparks.github.io/LexVault/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![React](https://img.shields.io/badge/Frontend-React%2018%20%2B%20TypeScript-61DAFB?logo=react&logoColor=black)](frontend/)
 [![Solidity](https://img.shields.io/badge/Smart%20Contracts-Solidity%200.8.20-363636?logo=solidity)](contracts/)
@@ -21,7 +21,7 @@
 [![Prototype Status](https://img.shields.io/badge/Status-Hackathon%20Prototype-orange)](#verified-prototype-results)
 
 <p align="center">
-  <a href="https://mohanapriya-sparks.github.io/lexvault/"><strong>🌐 Launch Public Showcase</strong></a> •
+  <a href="https://mohanapriya-sparks.github.io/LexVault/"><strong>🌐 Launch Public Showcase</strong></a> •
   <a href="#local-setup-and-quickstart"><strong>💻 Local Setup</strong></a> •
   <a href="docs/ARCHITECTURE.md"><strong>📐 Architecture</strong></a> •
   <a href="docs/DEMO_GUIDE.md"><strong>🎯 Demo Walkthrough</strong></a> •
@@ -102,7 +102,7 @@ LexVault is built for empirical scrutiny. Every security claim can be falsified 
 | **Post-Registration Integrity** | Modifying a single byte of evidence invalidates verification. | Click **"Simulate 1-Byte Tamper"** on Case #101 in the UI, or change 1 character in test evidence. | Groth16 witness generation fails / EVM `verifyProof` returns `false` (`Proof Rejected`). |
 | **Case Isolation** | Evidence valid in Case #101 cannot verify against Case #107's root. | Attempt to verify Case #101's witness against Case #107's on-chain root. | Circom constraint violation / Merkle root mismatch rejection. |
 | **Zero Knowledge** | Verifier learns nothing about file contents or SHA-256 hash. | Inspect public circuit inputs in the UI or on-chain call payload. | Only `merkleRoot` is public. File contents, `leaf`, and `merklePath` are entirely private. |
-| **Gasless Verification** | ZK verification does not spend ETH or write state. | Inspect the RPC call sent during ZK verification. | Verification uses JSON-RPC `eth_call` to `Verifier.sol`. Gas used = 0 Wei, TX count unchanged. |
+| **Read-Only EVM Verification** | ZK verification does not spend ETH or write state. | Inspect the RPC call sent during ZK verification. | Read-only EVM `eth_call`: no transaction is submitted, no blockchain state changes, and no gas fee is paid. |
 | **2-of-3 Quorum Access** | 1 key share cannot reconstruct the AES encryption key. | Attempt decryption with Officer 1 only in the Quorum Decryption panel. | Key reconstruction mathematically fails; decryption rejected until 2 distinct shares provided. |
 | **Tamper-Evident Custody** | Handoff records cannot be purged or backdated. | Query `CustodyLedger.sol` event logs for Case #101 on the blockchain. | Chronological, indexed on-chain events (`EvidenceRegistered`, `CustodyTransferred`). |
 
@@ -126,7 +126,7 @@ flowchart TD
         F --> G[Public Merkle Root]
     end
 
-    subgraph Blockchain["Ethereum Ledger (Hardhat / EVM)"]
+    subgraph Blockchain["Local Hardhat EVM Ledger (Chain ID 31337)"]
         G -->|registerCase(caseId, root)| H[CustodyLedger.sol]
         I[Custody Transfer Events] -->|Immutable Audit Log| H
         J[Groth16 Verifier.sol]
@@ -158,25 +158,29 @@ flowchart TD
 
 LexVault structures digital evidence management across seven distinct phases:
 
-```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────────┐
-│  1. UPLOAD  │ ──> │2. FINGERPRT │ ──> │ 3. ENCRYPT  │ ──> │4. ANCHOR ROOT   │
-│ Client File │     │ SHA-256 +   │     │ AES-256-GCM │     │ Poseidon Root   │
-│ Selection   │     │ Field Mod   │     │ + IV/AuthTag│     │ on Smart Cont.  │
-└─────────────┘     └─────────────┘     └─────────────┘     └─────────────────┘
-                                                                     │
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐             │
-│ 7. REVIEW   │ <── │ 6. ZK VERIFY│ <── │ 5. TRANSFER │ <───────────┘
-│ 2-of-3 Key  │     │ Groth16 via │     │ Immutable   │
-│ Quorum Dec. │     │ EVM eth_call│     │ Custody Log │
-└─────────────┘     └─────────────┘     └─────────────┘
+```mermaid
+flowchart LR
+    A["1. Upload<br/>(Client File)"] --> B["2. Fingerprint<br/>(SHA-256 Digest)"]
+    B --> C["3. Encrypt<br/>(AES-256-GCM + Shares)"]
+    C --> D["4. Anchor Root<br/>(Poseidon Tree Root)"]
+    D --> E["5. Custody Log<br/>(Hardhat EVM Ledger)"]
+    E --> F["6. ZK Verify<br/>(Groth16 eth_call)"]
+    F --> G["7. Quorum Review<br/>(2-of-3 Decryption)"]
+
+    style A fill:#0f172a,stroke:#38bdf8,stroke-width:1.5px,color:#fff
+    style B fill:#0f172a,stroke:#38bdf8,stroke-width:1.5px,color:#fff
+    style C fill:#0f172a,stroke:#38bdf8,stroke-width:1.5px,color:#fff
+    style D fill:#1e1b4b,stroke:#818cf8,stroke-width:1.5px,color:#fff
+    style E fill:#1e1b4b,stroke:#818cf8,stroke-width:1.5px,color:#fff
+    style F fill:#064e3b,stroke:#34d399,stroke-width:1.5px,color:#fff
+    style G fill:#064e3b,stroke:#34d399,stroke-width:1.5px,color:#fff
 ```
 
 1. **Upload**: Officer selects an evidence file within the secure browser workspace.
 2. **Fingerprint**: The file is hashed with SHA-256 client-side and mapped to the BN128 scalar field.
 3. **Encrypt**: Authenticated encryption (Web Crypto AES-256-GCM) secures the binary payload in the browser.
 4. **Blockchain Anchor**: The derived Poseidon Merkle root is registered on-chain in `CustodyLedger.sol`.
-5. **Custody Transfer**: Officers record tamper-evident custody handoffs on-chain.
+5. **Custody Transfer**: Current custodian records authenticated custody handoffs on-chain.
 6. **ZK Verification**: An examiner proves evidence membership via Groth16 without disclosing the file.
 7. **Authorised Review**: 2-of-3 threshold approval reconstructs the key for authorized inspection.
 
@@ -204,15 +208,15 @@ LexVault structures digital evidence management across seven distinct phases:
 
 The LexVault prototype has been validated across all core layers:
 
-| Test Suite / Layer | Scope | Checks Passed | Status |
+| Test Suite / Layer | Scope | Result | Status |
 | :--- | :--- | :---: | :---: |
-| **Frontend Production Build** | TypeScript Compilation & Vite Bundle | `Passed` | :white_check_mark: Clean build |
-| **Smart Contract Test Suite** | Registration, transfers, and verifier integration | `4 / 4` | :white_check_mark: Passed |
-| **Circom Circuit Test Suite** | Valid witness, fake leaf, invalid root, path constraints | `4 / 4` | :white_check_mark: Passed |
-| **End-to-End Lifecycle Tests** | Full upload $\to$ ZK proof $\to$ EVM verification | `5 / 5` | :white_check_mark: Passed |
-| **Case Isolation Regressions** | Cross-case proof rejection & isolation (#101 vs #107) | `12 / 12` | :white_check_mark: Passed |
-| **Security Policy Verification** | Quorum thresholds, tamper rejection, secret hygiene | `16 / 16` | :white_check_mark: Passed |
-| **Presentation Preflight Suite** | RPC health, contract state, seeded demo cases | `8 / 8` | :white_check_mark: Passed |
+| **Frontend Production Build** | TypeScript Compilation & Vite Bundle | `0 Errors` | :white_check_mark: Clean build |
+| **Smart Contract Test Suite** | Registration, transfers, authorization, and verifier integration | `All Passing` | :white_check_mark: Passed |
+| **Circom Circuit Test Suite** | Valid witness, fake leaf, invalid root, path constraints | `All Passing` | :white_check_mark: Passed |
+| **End-to-End Lifecycle Tests** | Full upload $\to$ ZK proof $\to$ EVM verification | `All Passing` | :white_check_mark: Passed |
+| **Case Isolation Regressions** | Cross-case proof rejection & isolation (#101 vs #107) | `All Passing` | :white_check_mark: Passed |
+| **Security Policy Verification** | Quorum thresholds, tamper rejection, secret hygiene | `All Passing` | :white_check_mark: Passed |
+| **Presentation Preflight Suite** | RPC health, contract state, seeded demo cases | `All Passing` | :white_check_mark: Passed |
 
 > [!IMPORTANT]
 > **Prototype Verification Qualification**
@@ -284,7 +288,7 @@ Plain-language reference explaining Groth16, Poseidon hashing, Shamir secret sha
 1. **Mathematical Membership**: Proves that a specific evidence commitment exists within a registered on-chain Poseidon Merkle tree root.
 2. **Post-Registration Immutability**: Proves the examined evidence file matches the exact byte sequence registered at the recorded timestamp.
 3. **Groth16 Zero-Knowledge Correctness**: Proves the validity of the SNARK proof ($\pi_A, \pi_B, \pi_C$) under the BN128 elliptic curve pairing.
-4. **Tamper-Evident Custody Chain**: Proves the sequence and metadata of custody handoffs recorded on the Ethereum blockchain.
+4. **Tamper-Evident Custody Chain**: Proves the sequence and metadata of custody handoffs recorded on the local Hardhat EVM ledger (chain ID 31337).
 
 ### What LexVault Does NOT Prove
 1. **Pre-Registration Authenticity**: Does not prove evidence was untampered or authentic prior to registration.
@@ -297,7 +301,13 @@ Plain-language reference explaining Groth16, Poseidon hashing, Shamir secret sha
 ### Protocol & ZKP Disclosures
 - **ZKP Circuit Verification Limitation**:
   > *“The Groth16 circuit proves knowledge of a leaf and Merkle path matching the registered root. By itself, it does not prove possession of the current raw evidence file or that the file was truthful when registered. Tamper detection depends on the application correctly recomputing the fingerprint from the reviewed file and comparing it through the verification workflow.”*
-- **Read-Only Verification**: Proof verification is executed via JSON-RPC `eth_call`. It is a read-only EVM state simulation: **no transaction is broadcast, no blockchain state is altered, and zero gas fee is incurred**.
+- **Backend & Storage Compromise Disclosure**:
+  > *“A compromised prototype backend or its storage could expose: ciphertext, IV, AES-GCM authentication tag, evidence leaf / original commitment, Merkle witness material available to the prover, colocated Shamir shares, and metadata such as filename and MIME type. Zero-Knowledge proofs protect private witness values from public proof verification; they do not protect them from compromise of the trusted prover or backend host environment. A production deployment should distribute shares among independent custodians, devices or approval services.”*
+- **Read-Only Verification & Ledger Semantics**: Read-only EVM `eth_call`: no transaction is submitted, no blockchain state changes, and no gas fee is paid. The full MVP uses a local Hardhat EVM ledger with chain ID 31337. The protection holds while local Hardhat ledger state is preserved; the MVP chain can be reset or redeployed.
+- **Unsalted Leaf Commitments, Padding Leaves, and Scalar Field Capacity**:
+  - *Unsalted Leaf Mapping*: The prototype maps SHA-256 digests into the BN128 scalar field as $L = \text{SHA-256}(\text{data}) \pmod r$ without a per-item secret salt. If candidate evidence files have low entropy or are drawn from a small known set, an adversary observing the leaf value could test candidate files. Future production iterations should employ a salted commitment scheme such as $\text{Poseidon}(\text{domain\_sep}, \text{hash}, \text{salt})$.
+  - *Deterministic Padding Leaves*: Case Merkle trees pad unused leaf slots with deterministic zeros (`0`). Future designs should use domain-separated dummy leaves or sparse Merkle tree architectures.
+  - *BN128 Scalar Field Capacity*: The BN128 scalar field prime $r = 21888242871839275222246405745257275088548364400416034343698204186575808495617 \approx 2^{253.7}$ defines the scalar field capacity (~253.7 bits). Collision resistance of the SHA-256 evidence digest before modulo reduction remains bounded by SHA-256 (128 bits against collision attacks), and the reduction modulo $r$ maps 256-bit digests into the scalar field with negligible bias.
 - **Public vs Private Inputs**: The case Merkle root is public. Raw evidence files, hashes, and private witness paths remain strictly private.
 - **Metadata Transmission Disclosure**: The registration payload includes the original filename and MIME type as unencrypted metadata for investigator reference. If filename confidentiality is required, a production deployment should transmit generic categorical labels (e.g. `evidence_item_01.dat`) or client-side encrypted metadata envelopes.
 - **Shamir Key Distribution Limitation**:
@@ -313,12 +323,13 @@ LexVault provides two distinct execution environments:
 | Feature / Dimension | Public Showcase Mode (Static) | Full Local Cryptographic Mode |
 | :--- | :--- | :--- |
 | **Hosting Environment** | GitHub Pages (Static Web App) | Local Machine (Node.js + Hardhat) |
-| **Backend Requirement** | None (Fully self-contained) | Express API service (`localhost:3001`) |
-| **Blockchain Network** | Mocked state with preloaded demo cases | Local Hardhat EVM Node (`localhost:8545`) |
-| **ZK Proving Engine** | Simulated Groth16 outputs (`[Demonstration output]`) | Real `snarkjs` Groth16 witness & proof generation |
-| **EVM Verifier Execution** | Pre-computed verification assertions | Live `eth_call` to compiled `Verifier.sol` |
-| **Client-Side Encryption** | Simulated / client-memory encryption | Full Web Crypto AES-256-GCM + Shamir share generation |
-| **Purpose** | Immediate evaluation, UI review, pitch demo | Reproducible cryptographic falsification & auditing |
+| **Backend Requirement** | None (Fully self-contained in browser) | Express API service (`localhost:3001`) |
+| **Blockchain Network** | Mocked state with preloaded demo cases (`DEMO-TX-...`) | Local Hardhat EVM Node (`localhost:8545`) |
+| **ZK Proving Engine** | Simulated Groth16 outputs (`SIMULATED — Showcase Only`) | Real `snarkjs` Groth16 witness & proof generation |
+| **EVM Verifier Execution** | Simulated verifier check (`SIMULATED — Showcase Only`) | Live `eth_call` to compiled `Verifier.sol` |
+| **Evidence Encryption** | **REAL — Browser Web Crypto** (SHA-256, AES-256-GCM) | **REAL — Browser Web Crypto** (AES-256-GCM encrypted client-side before transmission; Express receives and stores ciphertext) |
+| **Quorum Key Reconstruction**| **REAL — Browser Web Crypto** (2-of-3 Lagrange interpolation) | **REAL — Local Prover** + Backend Quorum API |
+| **Purpose** | Immediate zero-install evaluation on GitHub Pages | Reproducible end-to-end cryptographic auditing |
 
 ---
 
@@ -383,8 +394,8 @@ Follow these steps to run the complete cryptographic prototype with live EVM ver
 ### 1. Clone Repository & Install Dependencies
 
 ```bash
-git clone https://github.com/Mohanapriya-sparks/lexvault.git
-cd lexvault
+git clone https://github.com/Mohanapriya-sparks/LexVault.git
+cd LexVault
 
 # Install root dependencies
 npm install
@@ -406,10 +417,10 @@ npm run compile:circuit
 ### 3. Run Test Suites
 
 ```bash
-# Run Smart Contract unit tests (4/4)
+# Run Smart Contract unit tests
 npm run test:contracts
 
-# Run Circom ZK Circuit tests (4/4)
+# Run Circom ZK Circuit tests
 npm run test:circuit
 ```
 

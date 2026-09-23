@@ -50,7 +50,7 @@ export const LEXVAULT_FEATURES: FeatureItem[] = [
     targetElementId: "custody-transfer",
     visibility: "Public (On-Chain)",
     techStack: "Solidity CustodyLedger.sol / Hardhat",
-    purpose: "Records every authorised transfer with sender, recipient, timestamp, and signature validation.",
+    purpose: "Records every authenticated transfer with sender, recipient, timestamp, and transfer authorization audit payload.",
   },
   {
     id: 5,
@@ -70,7 +70,7 @@ export const LEXVAULT_FEATURES: FeatureItem[] = [
     targetElementId: "threshold-decryption",
     visibility: "Private (Off-Chain)",
     techStack: "Lagrange Polynomial Interpolation",
-    purpose: "Requires 2 authorised role signatures to reconstruct the AES decryption key. Blocks single-party exfiltration.",
+    purpose: "Requires 2 authorised role shares to reconstruct the AES decryption key. Blocks single-party exfiltration.",
   },
   {
     id: 7,

@@ -62,11 +62,13 @@ contract CustodyLedger {
 
     /**
      * @notice Registers a new evidence case by storing its case-level Poseidon Merkle root.
+     * @dev MVP Registrar Note: In this prototype, any caller may register a new caseId.
+     *      Production deployment requires a permissioned registrar contract or decentralized identity gating.
      * @param caseId Unique identifier for the case.
      * @param merkleRoot Poseidon Merkle root covering the case's evidence leaf and dummy leaves.
      */
     function registerCase(uint256 caseId, bytes32 merkleRoot) external {
-        require(cases[caseId].timestamp == 0, "Case already registered");
+        require(cases[caseId].merkleRoot == bytes32(0), "Case already registered");
         require(merkleRoot != bytes32(0), "Invalid Merkle root");
 
         cases[caseId] = CaseRecord({
@@ -79,10 +81,15 @@ contract CustodyLedger {
     }
 
     /**
-     * @notice Records a signed custody transfer event for a registered case.
+     * @notice Records an authorized custody transfer event for a registered case.
+     * @dev Authorization Enforcement:
+     *      - msg.sender MUST match the recorded current custodian.
+     *      - Destination address `to` cannot be address(0) or the existing custodian.
+     *      - Audit Payload Note: The `signature` parameter is stored as an authorization/audit
+     *        payload on-chain. Cryptographic EIP-712 signature verification is planned future work.
      * @param caseId Unique case identifier.
      * @param to Address of the new custodian.
-     * @param signature Cryptographic signature of the transfer authorization.
+     * @param signature Authorization/audit payload recorded with the custody event.
      */
     function transferCustody(
         uint256 caseId,
@@ -92,6 +99,8 @@ contract CustodyLedger {
         CaseRecord storage record = cases[caseId];
         require(record.merkleRoot != bytes32(0), "Case not registered");
         require(to != address(0), "Invalid new custodian");
+        require(msg.sender == record.custodian, "Only current custodian can transfer");
+        require(to != record.custodian, "Cannot transfer to current custodian");
 
         address currentCustodian = record.custodian;
         record.custodian = to;

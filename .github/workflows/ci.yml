@@ -41,11 +41,28 @@ jobs:
         working-directory: ./frontend
         run: npm run build
 
-      - name: Automated Secret & Environment File Check
+      - name: Build Showcase Bundle
+        run: npm run build:showcase
+        env:
+          VITE_SHOWCASE_MODE: "true"
+          VITE_BASE_PATH: /LexVault/
+
+      - name: Run Gitleaks Security Scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
+      - name: Automated Secret & Repository Security Scan
         run: |
-          echo "Scanning for accidental secret commits..."
-          if [ -f .env ]; then
-            echo "ERROR: .env file found in commit!"
-            exit 1
-          fi
-          echo "Secret check passed."
+          npm run scan:public
+          npm run scan:git
+
+      - name: Verify Documentation Links, Brand Integrity & Assets
+        run: npm run verify:repo
+
+      - name: Install Playwright Chromium Browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Verify Showcase Runtime Zero-Network Purity
+        run: npm run test:showcase-network

@@ -10,7 +10,7 @@ This document details the trust assumptions, attacker capabilities, security bou
 | :--- | :--- | :--- | :--- |
 | **Raw Evidence Payload** | High (Client-encrypted with AES-256-GCM) | High (Guaranteed via SHA-256 + Merkle root) | Medium (Off-chain storage) |
 | **AES Decryption Key** | High (Split into 2-of-3 Shamir shares) | High (Protected by field arithmetic) | High (Reconstructed via any 2 shares) |
-| **Case Merkle Root** | Public (Published on Ethereum ledger) | High (Enforced by EVM consensus) | High (Ethereum network uptime) |
+| **Case Merkle Root** | Public (Published on EVM ledger) | High (Enforced by ledger contract) | High (Local / network RPC availability) |
 | **Chain of Custody Logs** | Public (Indexed on smart contract events) | High (Append-only blockchain log) | High (EVM event queryable) |
 | **Witness Values & Merkle Paths** | High (Private to prover during proof) | High (Circuit constraints) | Local Prover |
 
@@ -46,7 +46,13 @@ This document details the trust assumptions, attacker capabilities, security bou
 
 ### Threat 4: Backend Compromise & Share Colocation (MVP Scope Disclosure)
 - **Mandatory Disclosure:**
-  > *“The prototype demonstrates 2-of-3 approval and Shamir-based key reconstruction. If all shares are accessible to the same backend process or storage environment, compromise of that environment could permit key reconstruction. A production deployment should distribute shares among independent custodians, devices or approval services.”*
+  > *“A compromised prototype backend or its storage could expose: ciphertext, IV, AES-GCM authentication tag, evidence leaf / original commitment, Merkle witness material available to the prover, colocated Shamir shares, and metadata such as filename and MIME type. Zero-Knowledge proofs protect private witness values from public proof verification; they do not protect them from compromise of the trusted prover or backend host environment. A production deployment should distribute shares among independent custodians, devices or approval services.”*
+
+### Threat 5: Low-Entropy Evidence Candidates & Unsalted Leaf Commitments
+- **Attacker Goal:** Precompute candidate file hashes to identify which file corresponds to an evidence leaf.
+- **Analysis:**
+  - The prototype maps $L = \text{SHA-256}(\text{data}) \pmod r$ without a per-item salt. If candidate files have low entropy or are known, an attacker observing $L$ could test candidates.
+- **Mitigation / Future Work:** Future iterations should employ a salted commitment scheme such as $\text{Poseidon}(\text{domain\_sep}, \text{hash}, \text{salt})$.
 
 ---
 
@@ -61,7 +67,8 @@ This document details the trust assumptions, attacker capabilities, security bou
 3. **Cryptographic Setup Disclosure:**
    > `circuits/build/pot12_final.ptau` is a **Phase 1 Powers-of-Tau artifact** (universal SRS), and `circuits/build/evidence_verifier_final.zkey` is **circuit-specific Phase 2 material**. The included trusted setup was generated locally for prototype demonstration and is not a formal multi-party production ceremony.
 
-4. **Read-Only EVM Verification:** Proof verification occurs via read-only EVM `eth_call`. It modifies no state, spends no gas, and records no transaction receipt.
+4. **Read-Only EVM Verification & Ledger Semantics:**
+   > Read-only EVM `eth_call`: no transaction is submitted, no blockchain state changes, and no gas fee is paid. The full MVP uses a local Hardhat EVM ledger with chain ID 31337. Its state can be reset or redeployed.
 
 5. **Prototype Verification Qualification:**
-   > *LexVault passed all implemented build, smart-contract, circuit, lifecycle, isolation, security-policy and presentation-preflight checks. These results validate the hackathon prototype’s implemented behaviour; they do not constitute a professional security audit or guarantee production readiness.*
+   > *LexVault passed all implemented build, smart-contract, circuit, lifecycle, isolation, security-policy and presentation-preflight checks. These results validate the hackathon prototype’s implemented behaviour; they do not constitute a professional security audit or guarantee production readiness. The protection holds while local Hardhat ledger state is preserved; the MVP chain can be reset or redeployed.*

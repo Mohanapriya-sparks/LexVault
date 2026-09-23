@@ -319,7 +319,29 @@ app.post("/api/transfer-custody", async (req: any, res: any) => {
 
         let txHash = "0x_demo_simulated_tx";
         if (custodyContract) {
-            const tx = await custodyContract.transferCustody(caseIdNum, validAddress, sigBytes);
+            // Verify currentCustodian is an available unlocked account on the local node
+            const availableAccounts: string[] = await provider.send("eth_accounts", []);
+            const isUnlocked = availableAccounts.some(
+                (acc: string) => acc.toLowerCase() === currentCustodian.toLowerCase()
+            );
+
+            if (!isUnlocked) {
+                recordSecurityEvent({
+                    eventType: "ACCESS_DENIED",
+                    caseId: caseIdNum,
+                    details: {
+                        attemptedCustodian: currentCustodian,
+                        reason: "custodian_account_not_unlocked",
+                        targetAddress: validAddress,
+                    },
+                });
+                return res.status(403).json({
+                    error: `Transfer unauthorized: Current custodian address (${currentCustodian}) is not an unlocked account on this local node. Transfers must be submitted by the active custodian.`,
+                });
+            }
+
+            const custodianSigner = await provider.getSigner(currentCustodian);
+            const tx = await custodyContract.connect(custodianSigner).transferCustody(caseIdNum, validAddress, sigBytes);
             const receipt = await tx.wait();
             txHash = receipt.hash;
         }

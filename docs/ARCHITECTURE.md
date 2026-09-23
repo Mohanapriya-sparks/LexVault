@@ -22,7 +22,7 @@ flowchart TD
         MerkleTree["🌲 Poseidon Binary Merkle Tree<br/>(Depth 3, Salted per Case)"]
     end
 
-    subgraph Blockchain["⛓️ Ethereum Blockchain (EVM)"]
+    subgraph Blockchain["⛓️ Local Hardhat EVM Ledger (Chain ID 31337)"]
         Ledger["📜 CustodyLedger.sol<br/>• caseMerkleRoots[caseId]<br/>• Signed Custody Transfer Log"]
         Verifier["📐 Verifier.sol<br/>• Deployed Pairing Verifier<br/>• Read-only EVM eth_call"]
     end
@@ -76,8 +76,8 @@ flowchart TD
 2. The tree of depth 3 computes the root $R = \text{PoseidonTree}(\text{leaf}, \text{siblings})$.
 3. The Merkle root $R$ is anchored on-chain via `CustodyLedger.registerCase(caseId, rootHex)`.
 
-### Stage 3: On-Chain Signed Custody Ledger
-1. Custody transfers are recorded on `CustodyLedger.sol` by the current custodian calling `transferCustody(caseId, newCustodian)`.
+### Stage 3: On-Chain Authenticated Custody Ledger
+1. Custody transfers are recorded on `CustodyLedger.sol` exclusively by the verified `currentCustodian` calling `transferCustody(caseId, newCustodian)`.
 2. Emits `CustodyTransferred(caseId, from, to, block.timestamp)`.
 
 ### Stage 4: Off-Chain 2-of-3 Shamir Threshold Key Reconstruction
@@ -88,13 +88,15 @@ flowchart TD
 
 ### Stage 5: Zero-Knowledge Groth16 Verification
 1. Prover inputs:
-   - **Private inputs:** `leaf`, `originalCommitment`, `merklePath[3]`, `pathIndices[3]`.
-   - **Public input:** `merkleRoot`.
-2. The Circom circuit `EvidenceVaultVerifier` asserts:
+   - **Private inputs (8 signals):** `leaf` (1), `originalCommitment` (1), `merklePath[3]` (3), `pathIndices[3]` (3).
+   - **Public input (1 signal):** `merkleRoot` only. (`caseId` is not a circuit signal; case binding is enforced on-chain in `CustodyLedger.sol` by verifying `cases[caseId].merkleRoot == publicSignals[0]`).
+2. Exact R1CS constraints: **1,560 constraints** (verified via `snarkjs r1cs info`, with 1,568 wires and 8 private inputs).
+3. The Circom circuit `EvidenceVaultVerifier` asserts:
    - $\text{leaf} == \text{originalCommitment}$
+   - $\text{pathIndices}[i] \in \{0, 1\}$ boolean constraints
    - $\text{ComputedRoot}(\text{leaf}, \text{merklePath}, \text{pathIndices}) == \text{merkleRoot}$.
-3. Proof verification invokes `CustodyLedger.verifyEvidence(caseId, a, b, c)` via **read-only EVM `eth_call`**.
-4. **Execution Method:** No transaction is submitted, no blockchain state is changed, and no gas fee is paid.
+4. Proof verification invokes `CustodyLedger.verifyEvidence(caseId, a, b, c)` via **read-only EVM `eth_call`**.
+5. **Execution Method:** Read-only EVM `eth_call`: no transaction is submitted, no blockchain state changes, and no gas fee is paid.
 
 ---
 
@@ -104,7 +106,25 @@ flowchart TD
 
 ---
 
-## 4. Shamir Key Distribution Disclosure
+## 4. Backend Compromise & Trusted Prover Boundary
+
+> [!IMPORTANT]
+> **Backend & Storage Compromise Disclosure**
+> *A compromised prototype backend or its storage could expose: ciphertext, IV, AES-GCM authentication tag, evidence leaf / original commitment, Merkle witness material available to the prover, colocated Shamir shares, and metadata such as filename and MIME type.*
+> 
+> *Zero-Knowledge proofs protect private witness values from public proof verification; they do not protect them from compromise of the trusted prover or backend host environment.*
+
+---
+
+## 5. Unsalted Leaf Commitments, Padding Leaves, and Scalar Field Capacity
+
+- **Unsalted Leaf Mapping:** The prototype maps SHA-256 digests into the BN128 scalar field as $L = \text{SHA-256}(\text{data}) \pmod r$ without a per-item secret salt. If candidate evidence files have low entropy or are drawn from a small known set, an adversary observing the leaf value could test candidate files. Future production iterations should employ a salted commitment scheme such as $\text{Poseidon}(\text{domain\_sep}, \text{hash}, \text{salt})$.
+- **Deterministic Padding Leaves:** Case Merkle trees pad unused leaf slots with deterministic zeros (`0`). Future designs should use domain-separated dummy leaves or sparse Merkle tree architectures.
+- **BN128 Scalar Field Capacity:** The BN128 scalar field prime $r = 21888242871839275222246405745257275088548364400416034343698204186575808495617 \approx 2^{253.7}$ defines the scalar field capacity (~253.7 bits). Collision resistance of the SHA-256 evidence digest before modulo reduction remains bounded by SHA-256 (128 bits against collision attacks), and the reduction modulo $r$ maps 256-bit digests into the scalar field with negligible bias.
+
+---
+
+## 6. Shamir Key Distribution Disclosure
 
 > [!WARNING]
 > **Prototype Key Distribution Limitation**
@@ -112,6 +132,6 @@ flowchart TD
 
 ---
 
-## 5. Prototype Verification Qualification
+## 7. Prototype Verification Qualification
 
-> *LexVault passed all implemented build, smart-contract, circuit, lifecycle, isolation, security-policy and presentation-preflight checks. These results validate the hackathon prototype’s implemented behaviour; they do not constitute a professional security audit or guarantee production readiness.*
+> *LexVault passed all implemented build, smart-contract, circuit, lifecycle, isolation, security-policy and presentation-preflight checks. These results validate the hackathon prototype’s implemented behaviour; they do not constitute a professional security audit or guarantee production readiness. The protection holds while local Hardhat ledger state is preserved; the MVP chain can be reset or redeployed.*

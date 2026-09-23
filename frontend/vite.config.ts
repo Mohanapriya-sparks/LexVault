@@ -6,7 +6,7 @@ const extraHosts = process.env.__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS
   : [];
 
 export default defineConfig({
-  base: process.env.VITE_BASE_PATH || (process.env.GITHUB_ACTIONS ? '/lexvault/' : './'),
+  base: process.env.VITE_BASE_PATH || (process.env.GITHUB_ACTIONS ? '/LexVault/' : './'),
   plugins: [react()],
   server: {
     host: '0.0.0.0',

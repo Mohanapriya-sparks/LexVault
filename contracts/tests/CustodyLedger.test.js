@@ -95,7 +95,7 @@ describe("CustodyLedger Smart Contract Tests", function () {
         expect(record.custodian).to.equal(investigator.address);
     });
 
-    it("should log custody transfers successfully", async function () {
+    it("should allow initial custodian to transfer custody and log history", async function () {
         const caseId = 101;
         const merkleRootHex = "0x" + BigInt("1234567890987654321").toString(16).padStart(64, "0");
         await ledger.connect(investigator).registerCase(caseId, merkleRootHex);
@@ -110,6 +110,96 @@ describe("CustodyLedger Smart Contract Tests", function () {
         expect(history.length).to.equal(1);
         expect(history[0].from).to.equal(investigator.address);
         expect(history[0].to).to.equal(forensicOfficer.address);
+    });
+
+    it("should reject custody transfer if caller is not current custodian", async function () {
+        const caseId = 102;
+        const merkleRootHex = "0x" + BigInt("1234567890987654321").toString(16).padStart(64, "0");
+        await ledger.connect(investigator).registerCase(caseId, merkleRootHex);
+
+        const sig = "0xabcdef1234567890";
+        // Court Reviewer is NOT the custodian (Investigator is)
+        await expect(
+            ledger.connect(courtReviewer).transferCustody(caseId, forensicOfficer.address, sig)
+        ).to.be.revertedWith("Only current custodian can transfer");
+    });
+
+    it("should reject custody transfer by former custodian after handoff", async function () {
+        const caseId = 103;
+        const merkleRootHex = "0x" + BigInt("1234567890987654321").toString(16).padStart(64, "0");
+        await ledger.connect(investigator).registerCase(caseId, merkleRootHex);
+
+        const sig1 = "0x11111111";
+        // Transfer Investigator -> Forensic Officer
+        await ledger.connect(investigator).transferCustody(caseId, forensicOfficer.address, sig1);
+
+        const sig2 = "0x22222222";
+        // Investigator is now the FORMER custodian and must be rejected
+        await expect(
+            ledger.connect(investigator).transferCustody(caseId, courtReviewer.address, sig2)
+        ).to.be.revertedWith("Only current custodian can transfer");
+    });
+
+    it("should allow new custodian to perform subsequent custody transfer", async function () {
+        const caseId = 104;
+        const merkleRootHex = "0x" + BigInt("1234567890987654321").toString(16).padStart(64, "0");
+        await ledger.connect(investigator).registerCase(caseId, merkleRootHex);
+
+        const sig1 = "0x11111111";
+        // 1st Transfer: Investigator -> Forensic Officer
+        await ledger.connect(investigator).transferCustody(caseId, forensicOfficer.address, sig1);
+
+        const sig2 = "0x22222222";
+        // 2nd Transfer: Forensic Officer (current custodian) -> Court Reviewer
+        await ledger.connect(forensicOfficer).transferCustody(caseId, courtReviewer.address, sig2);
+
+        const record = await ledger.cases(caseId);
+        expect(record.custodian).to.equal(courtReviewer.address);
+
+        const history = await ledger.getCustodyHistory(caseId);
+        expect(history.length).to.equal(2);
+        expect(history[1].from).to.equal(forensicOfficer.address);
+        expect(history[1].to).to.equal(courtReviewer.address);
+    });
+
+    it("should reject custody transfer to zero address", async function () {
+        const caseId = 105;
+        const merkleRootHex = "0x" + BigInt("1234567890987654321").toString(16).padStart(64, "0");
+        await ledger.connect(investigator).registerCase(caseId, merkleRootHex);
+
+        const sig = "0xabcdef";
+        await expect(
+            ledger.connect(investigator).transferCustody(caseId, ethers.ZeroAddress, sig)
+        ).to.be.revertedWith("Invalid new custodian");
+    });
+
+    it("should reject custody transfer to current custodian (self-transfer)", async function () {
+        const caseId = 106;
+        const merkleRootHex = "0x" + BigInt("1234567890987654321").toString(16).padStart(64, "0");
+        await ledger.connect(investigator).registerCase(caseId, merkleRootHex);
+
+        const sig = "0xabcdef";
+        await expect(
+            ledger.connect(investigator).transferCustody(caseId, investigator.address, sig)
+        ).to.be.revertedWith("Cannot transfer to current custodian");
+    });
+
+    it("should reject duplicate case registration based on merkleRoot existence", async function () {
+        const caseId = 107;
+        const merkleRootHex = "0x" + BigInt("1234567890987654321").toString(16).padStart(64, "0");
+        await ledger.connect(investigator).registerCase(caseId, merkleRootHex);
+
+        // Attempt second registration with same caseId
+        await expect(
+            ledger.connect(investigator).registerCase(caseId, merkleRootHex)
+        ).to.be.revertedWith("Case already registered");
+    });
+
+    it("should reject case registration with zero Merkle root", async function () {
+        const caseId = 108;
+        await expect(
+            ledger.connect(investigator).registerCase(caseId, ethers.ZeroHash)
+        ).to.be.revertedWith("Invalid Merkle root");
     });
 
     it("should reject verification for non-existent case", async function () {
